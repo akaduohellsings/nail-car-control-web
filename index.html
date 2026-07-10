@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>钉探 - 智能小车远程控制</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 顶部导航栏 -->
+    <header class="header">
+      <div class="header-logo">
+        <span class="logo-icon">🔩</span>
+        <span class="logo-text">钉探</span>
+      </div>
+      <div class="header-subtitle">智能小车道路钉子识别系统</div>
+    </header>
+
+    <!-- 主体内容区 -->
+    <main class="main">
+      <!-- 左侧面板 -->
+      <aside class="panel panel-left">
+        <!-- 用户信息 -->
+        <section class="card user-card">
+          <div class="user-avatar">
+            <svg viewBox="0 0 64 64" width="44" height="44">
+              <circle cx="32" cy="32" r="32" fill="#4f8cff"/>
+              <circle cx="32" cy="24" r="11" fill="#fff"/>
+              <ellipse cx="32" cy="52" rx="18" ry="14" fill="#fff"/>
+            </svg>
+          </div>
+          <div class="user-info">
+            <div class="user-name">操作员 Alpha</div>
+            <div class="user-role">高级控制员</div>
+          </div>
+        </section>
+
+        <!-- 小车状态 -->
+        <section class="card status-card">
+          <h3 class="card-title">小车状态</h3>
+          <div class="status-row">
+            <span class="status-dot status-dot--green" id="statusDot"></span>
+            <span class="status-text" id="statusText">正常运行</span>
+          </div>
+          <div class="status-select-row">
+            <label for="statusSelect">切换状态（模拟）：</label>
+            <select id="statusSelect">
+              <option value="running">正常运行</option>
+              <option value="disconnected">未连接</option>
+              <option value="error">报错</option>
+            </select>
+          </div>
+        </section>
+
+        <!-- 摄像头图像 -->
+        <section class="card camera-card">
+          <h3 class="card-title">摄像头实时画面</h3>
+          <div class="camera-feed" id="cameraFeed">
+            <canvas id="cameraCanvas" width="400" height="260"></canvas>
+            <div class="camera-overlay">
+              <span class="camera-rec">● REC</span>
+              <span class="camera-time" id="cameraTime">00:00:00</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 关键识别事件 -->
+        <section class="card events-card">
+          <h3 class="card-title">关键识别事件</h3>
+          <ul class="events-list" id="eventsList">
+            <li class="event-item event-nail">
+              <span class="event-icon">🔩</span>
+              <span class="event-text">识别到钉子</span>
+              <span class="event-time">12:03:21</span>
+            </li>
+            <li class="event-item event-picked">
+              <span class="event-icon">✅</span>
+              <span class="event-text">已拾取钉子</span>
+              <span class="event-time">12:03:45</span>
+            </li>
+            <li class="event-item event-clear">
+              <span class="event-icon">🟢</span>
+              <span class="event-text">暂无障碍，可通行</span>
+              <span class="event-time">12:04:02</span>
+            </li>
+          </ul>
+          <button class="btn btn-sim" id="btnSimEvent">模拟上报事件</button>
+        </section>
+      </aside>
+
+      <!-- 右侧面板 -->
+      <section class="panel panel-right">
+        <!-- 控制窗口 -->
+        <div class="card control-card">
+          <h3 class="card-title">命令控制窗口</h3>
+          <div class="control-form">
+            <div class="form-group">
+              <label for="cmdSelect">选择命令</label>
+              <select id="cmdSelect">
+                <option value="forward">向前</option>
+                <option value="backward">向后</option>
+                <option value="left">向左</option>
+                <option value="right">向右</option>
+                <option value="wait">等待</option>
+                <option value="pickup">拾取</option>
+                <option value="resolution">清晰度调整</option>
+              </select>
+            </div>
+            <!-- 动态参数区 -->
+            <div class="form-params" id="formParams"></div>
+            <button class="btn btn-send" id="btnSendCmd">发送命令</button>
+          </div>
+          <!-- 快捷方向键：无参数命令一行三个 -->
+          <div class="direction-pad">
+            <button class="dpad-btn" data-cmd="forward">▲ 向前</button>
+            <button class="dpad-btn" data-cmd="left">◀ 向左</button>
+            <button class="dpad-btn" data-cmd="right">向右 ▶</button>
+            <button class="dpad-btn" data-cmd="backward">▼ 向后</button>
+            <button class="dpad-btn" data-cmd="wait">⏸ 等待</button>
+            <button class="dpad-btn" data-cmd="pickup">🔩 拾取</button>
+            <!-- 有参数命令：单独一行 -->
+            <button class="dpad-btn dpad-btn--full" data-cmd="resolution">🎞 清晰度调整</button>
+          </div>
+        </div>
+
+        <!-- 消息列表 -->
+        <div class="card messages-card">
+          <h3 class="card-title">消息记录</h3>
+          <div class="messages-list" id="messagesList">
+            <div class="message msg-system">
+              <span class="msg-time">12:00:00</span>
+              <span class="msg-tag tag-system">系统</span>
+              <span class="msg-text">钉探系统已启动，等待连接...</span>
+            </div>
+            <div class="message msg-sent">
+              <span class="msg-time">12:01:10</span>
+              <span class="msg-tag tag-cmd">命令</span>
+              <span class="msg-text">发送命令：向前</span>
+            </div>
+            <div class="message msg-received">
+              <span class="msg-time">12:01:12</span>
+              <span class="msg-tag tag-event">事件</span>
+              <span class="msg-text">小车反馈：已执行"向前"</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
