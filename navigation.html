@@ -11,13 +11,13 @@
     <a class="brand" href="index.html"><span class="brand-mark">钉</span><strong>钉探<span>机器人控制台</span></strong></a>
     <nav aria-label="控制页面"><a href="index.html">手动控制</a><a href="navigation.html" aria-current="page">导航控制</a></nav>
     <span class="connection"><i></i><span id="connectionText">未连接状态服务</span></span>
-    <button class="button subtle" id="connectButton" type="button">连接只读状态</button>
+    <button class="button subtle" id="connectButton" type="button">连接任务服务</button>
     <button class="text-button" id="disconnectButton" type="button" disabled>断开</button>
     <button class="button subtle" id="settingsButton" type="button">连接设置</button>
   </header>
   <main>
-    <div class="page-heading"><div><span class="eyebrow">NAVIGATION</span><h1>导航控制</h1><p>查看导航任务与停车确认，保存目标草稿。</p></div><span class="version">只读状态 · 控制待接入</span></div>
-    <div class="notice"><span class="notice-icon">i</span><p>本阶段只读取任务状态，所有运动按钮禁用。地图与定位尚未接入。</p><span id="modeNotice">未连接</span></div>
+    <div class="page-heading"><div><span class="eyebrow">NAVIGATION</span><h1>导航控制</h1><p>查看导航任务与停车确认，保存目标草稿。</p></div><span class="version">实车只读 · 本地可模拟控制</span></div>
+    <div class="notice"><span class="notice-icon">i</span><p>实车接口保持只读。本地模拟服务可测试导航与接管，全部移动均为模拟。</p><span id="modeNotice">未连接</span></div>
     <div class="workspace">
       <section class="map-card card" aria-labelledby="mapTitle">
         <div class="card-heading"><div><h2 id="mapTitle">导航地图</h2><p>地图 — <span class="separator">/</span> 定位未确认</p></div><div class="map-tools"><button disabled aria-label="放大地图">＋</button><button disabled aria-label="缩小地图">−</button><button disabled aria-label="回到小车位置">◎</button></div></div>
@@ -35,25 +35,25 @@
             <p class="form-hint">坐标需要对应已确认的地图。保存草稿不会发送导航目标。</p>
             <div class="draft-actions"><button class="button subtle" type="submit">保存目标草稿</button><button class="text-button" id="clearDraft" type="button">清空</button></div>
             <p id="draftStatus" class="draft-status" role="status">尚未保存目标草稿</p>
-            <button class="button primary full" type="button" disabled title="导航接口尚未接入">开始导航 <span>接口待接入</span></button>
+            <button class="button primary full" id="startButton" type="button" disabled>开始导航 <span>仅本地模拟</span></button>
           </form>
         </section>
         <section class="card" aria-labelledby="taskTitle">
           <div class="card-heading"><div><h2 id="taskTitle">任务状态</h2><p>以节点回传状态为准</p></div><span class="small-tag" id="taskBadge">未获取</span></div>
-          <dl class="status-list"><div><dt>运行模式</dt><dd id="missionMode">—</dd></div><div><dt>任务阶段</dt><dd id="missionState">—</dd></div><div><dt>当前目标</dt><dd id="missionGoal">—</dd></div><div><dt>控制权</dt><dd>未接入</dd></div><div><dt>停车确认</dt><dd id="stationaryState">未确认</dd></div><div><dt>导航服务</dt><dd id="actionReady">未确认</dd></div><div><dt>取消 / 停车阶段</dt><dd id="haltState">—</dd></div><div><dt>清理模式</dt><dd id="cleaningMode">—</dd></div><div><dt>当前尝试次数</dt><dd id="attemptState">—</dd></div><div><dt>故障 / 告警</dt><dd id="missionAlarm">—</dd></div><div><dt>数据更新时间</dt><dd id="statusTime">—</dd></div><div><dt>心跳序号</dt><dd id="statusSequence">—</dd></div></dl>
-          <div class="task-actions"><button class="button subtle" disabled>暂停任务</button><button class="button subtle" disabled>恢复任务</button></div>
-          <p class="form-hint">暂停后保持暂停，需要显式恢复。</p>
+          <dl class="status-list"><div><dt>运行模式</dt><dd id="missionMode">—</dd></div><div><dt>任务阶段</dt><dd id="missionState">—</dd></div><div><dt>当前目标</dt><dd id="missionGoal">—</dd></div><div><dt>控制权</dt><dd id="controlOwner">未接入</dd></div><div><dt>控制阶段</dt><dd id="controlPhase">—</dd></div><div><dt>操作页面</dt><dd id="controllerPage">—</dd></div><div><dt>停车确认</dt><dd id="stationaryState">未确认</dd></div><div><dt>导航服务</dt><dd id="actionReady">未确认</dd></div><div><dt>取消 / 停车阶段</dt><dd id="haltState">—</dd></div><div><dt>清理模式</dt><dd id="cleaningMode">—</dd></div><div><dt>当前尝试次数</dt><dd id="attemptState">—</dd></div><div><dt>故障 / 告警</dt><dd id="missionAlarm">—</dd></div><div><dt>数据更新时间</dt><dd id="statusTime">—</dd></div><div><dt>心跳序号</dt><dd id="statusSequence">—</dd></div></dl>
+          <div class="task-actions"><button class="button subtle" id="pauseButton" disabled>暂停任务</button><button class="button subtle" id="resumeButton" disabled>恢复任务</button></div>
+          <p class="form-hint">暂停后保持暂停，需要显式恢复。HTTP 接收不代表停车完成。</p><div class="command-panel"><p id="commandFeedback" role="status">尚未发送操作</p><button class="text-button" id="resetButton" disabled>重置任务</button></div>
         </section>
       </aside>
     </div>
     <div class="bottom-grid">
-      <section class="card takeover-card"><div class="card-heading"><div><h2>手动接管</h2><p>导航取消并确认停车后，才开放手动控制。</p></div><button class="button subtle" disabled>申请手动接管</button></div><div class="takeover-flow"><span><b>1</b>申请接管</span><i>→</i><span><b>2</b>取消导航</span><i>→</i><span><b>3</b>确认停车</span><i>→</i><span><b>4</b>进入手动控制</span></div><div class="takeover-note"><span>接口尚未接入，控制权未确认</span><button class="button stop-button" disabled>停止并暂停任务</button></div><p class="form-hint">返回原手动页不会自动完成接管。网页停止按钮不替代硬件急停。</p></section>
+      <section class="card takeover-card"><div class="card-heading"><div><h2>手动接管</h2><p>导航取消并确认停车后，才开放手动控制。</p></div><button class="button subtle" id="requestManualButton" disabled>申请手动接管</button></div><div class="takeover-flow"><span><b>1</b>申请接管</span><i>→</i><span><b>2</b>取消导航</span><i>→</i><span><b>3</b>确认停车</span><i>→</i><span><b>4</b>进入手动控制</span></div><div class="takeover-note"><span id="takeoverStatus">实车接口只读，控制权未确认</span><button class="button stop-button" id="stopButton" disabled>停止并暂停任务</button></div><div class="manual-panel"><p>本地模拟方向控制 · 按住发送，松开停止</p><div class="manual-pad"><button class="button subtle" data-direction="forward" disabled>模拟前进</button><button class="button subtle" data-direction="left" disabled>模拟左转</button><button class="button subtle" data-direction="backward" disabled>模拟后退</button><button class="button subtle" data-direction="right" disabled>模拟右转</button></div><p id="manualIntentState">模拟意图：停止</p><button class="button subtle" id="releaseManualButton" disabled>结束手动接管</button></div><p class="form-hint">结束接管只归还控制权，不自动恢复导航。原手动页尚未加入本协调机制。</p></section>
       <section class="card log-card"><div class="card-heading"><div><h2>操作记录</h2><p>配置、草稿与任务反馈</p></div><button class="text-button" id="clearLog" type="button">清空记录</button></div><ul id="operationLog" class="operation-log" aria-live="polite"></ul></section>
     </div>
     <footer>钉探 · 导航控制 <span>单点导航优先 · 多点巡航后续接入</span></footer>
   </main>
   <dialog id="settingsDialog" aria-labelledby="settingsTitle">
-    <form id="settingsForm"><div class="dialog-heading"><h2 id="settingsTitle">连接设置</h2><button class="text-button" type="button" id="closeSettings" aria-label="关闭设置">✕</button></div><p>保存地址后，点击“连接只读状态”开始读取。</p><label>导航服务地址<input type="url" id="serviceUrl" placeholder="http://192.168.55.1:8091" /></label><p class="form-hint">读取 /api/v1/status，不连接旧手动控制接口。断开或过期时不显示停车已确认。</p><p id="settingsError" role="alert"></p><div class="dialog-actions"><button class="button primary" type="submit">保存配置</button></div></form>
+    <form id="settingsForm"><div class="dialog-heading"><h2 id="settingsTitle">连接设置</h2><button class="text-button" type="button" id="closeSettings" aria-label="关闭设置">✕</button></div><p>保存地址后，点击“连接任务服务”开始读取。</p><label>导航服务地址<input type="url" id="serviceUrl" placeholder="http://192.168.55.1:8091" /></label><p class="form-hint">实车地址仅允许读取状态。控制功能只对电脑上的本地模拟服务开放，不连接旧手动接口。</p><p id="settingsError" role="alert"></p><div class="dialog-actions"><button class="button primary" type="submit">保存配置</button></div></form>
   </dialog>
   <script type="module" src="navigation.js"></script>
 </body>

@@ -1,5 +1,7 @@
 # 钉探 Web 控制端
 
+最新模块（2026-10-01）：已完成本地模拟导航命令与手动接管。实车地址保持只读，只有明确声明模拟控制能力的回环服务可启用按钮。29 项自动测试及浏览器流程检查通过，模拟服务已关闭。本模块说明见 [docs/navigation-control.md](docs/navigation-control.md)。下文保留之前的只读开发记录。
+
 2026-10-01 最新：只读状态页面完成本地过期、断连、恢复、模式与异常显示及窄屏验收（12 个浏览器检查点、4 项接口测试）。没有启动小车；小车真实适配器待命显示仍待联调。本轮没有修改页面业务代码。最新说明见 [docs/navigation-status.md](docs/navigation-status.md)。
 
 现有页面为原生 HTML/CSS/JavaScript，包含摄像头显示、方向控制与检测事件。代码位置：`C:\Users\02\Desktop\frontend_web_car`。

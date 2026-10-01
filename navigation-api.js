@@ -1,4 +1,4 @@
-/** Read-only v1 navigation status. Commands remain unavailable. */
+/** Task v1 transport. Control is allowed only for an advertised loopback simulator. */
 export class NavigationNotConnectedError extends Error {
   constructor() { super('本阶段只读，未向小车发送控制命令'); this.name = 'NavigationNotConnectedError'; }
 }
@@ -8,7 +8,7 @@ const statusFields = ['schema_version','mode','source_instance_id','sequence','o
 const states = ['IDLE','NAV_STARTING','NAVIGATING','CANCELING','WAIT_STOP','CLEANING','VERIFYING','RESUMING','PAUSED','FAULT'];
 export function validateEnvelope(data) {
   const invalid = () => { throw new Error('导航状态格式不符合 v1 接口'); };
-  if (!data || data.schema_version !== 1 || data.read_only !== true || typeof data.bridge_instance_id !== 'string'
+  if (!data || data.schema_version !== 1 || typeof data.read_only !== 'boolean' || typeof data.bridge_instance_id !== 'string'
       || !['ONLINE','WAITING','STALE','INVALID','CONFLICT'].includes(data.connection)
       || !Number.isFinite(data.stale_after_seconds) || data.stale_after_seconds <= 0
       || !(data.age_seconds === null || (Number.isFinite(data.age_seconds) && data.age_seconds >= 0))) invalid();
@@ -30,15 +30,57 @@ export function validateEnvelope(data) {
         || typeof s.pending.request_id !== 'string' || !s.pending.request_id)) invalid();
   }
   if (data.connection === 'ONLINE' && (!s || data.age_seconds === null || data.age_seconds > data.stale_after_seconds)) invalid();
+  if (data.read_only === false) {
+    const c = data.control, cap = data.capabilities;
+    if (!cap || cap.schema_version !== 1 || cap.environment !== 'local_simulation' || cap.control_enabled !== true
+        || !c || c.schema_version !== 1 || (s && s.mode !== 'mock')
+        || !Number.isSafeInteger(c.control_epoch) || c.control_epoch < 0
+        || !['none','automatic','manual','blocked'].includes(c.owner)
+        || !['READY','NAV_STARTING','HALTING','MANUAL_READY','PAUSED','FAULT'].includes(c.phase)
+        || !(c.controller_id === null || typeof c.controller_id === 'string')
+        || typeof c.map_id !== 'string' || !c.map_id || typeof c.localization_valid !== 'boolean'
+        || !Number.isFinite(c.lease_remaining_seconds) || c.lease_remaining_seconds < 0
+        || !['stop','forward','backward','left','right'].includes(c.manual_direction)) invalid();
+    if (c.command_result !== null) validateReceipt(c.command_result);
+  }
   return data;
 }
 
-export function createNavigationApi({ baseUrl = '' } = {}) {
+export function validateReceipt(receipt) {
+  if (!receipt || receipt.schema_version !== 1 || typeof receipt.bridge_instance_id !== 'string'
+      || typeof receipt.request_id !== 'string' || typeof receipt.command !== 'string'
+      || !['pending','succeeded','failed','rejected'].includes(receipt.status)
+      || !(receipt.reason === null || typeof receipt.reason === 'string')) throw new Error('命令结果格式异常');
+  return receipt;
+}
+
+const loopback = baseUrl => {try {return ['127.0.0.1','localhost','[::1]'].includes(new URL(baseUrl).hostname);} catch {return false;} };
+export function controlPolicy(data, sessionId, locallyAllowed = true) {
+  const c=data?.control, s=data?.mission;
+  const available=locallyAllowed && data?.connection==='ONLINE' && data?.read_only===false
+    && data.capabilities?.environment==='local_simulation' && data.capabilities.control_enabled===true && s?.mode==='mock';
+  const own=c?.controller_id===sessionId, free=c?.controller_id===null, ready=available && (own||free);
+  const busy=c?.command_result?.status==='pending', halting=c?.phase==='HALTING', manual=ready&&own&&c.owner==='manual';
+  const stopped=s?.stationary_confirmed===true && !s.owned_goal_id && s.goal_response_pending===false && s.halt_state!=='UNCONFIRMED';
+  return {available,own,manual,
+    start:ready&&!busy&&!halting&&stopped&&c.localization_valid&&s.state==='IDLE'&&c.owner!=='manual',
+    pause:ready&&!busy&&!halting&&s.state!=='IDLE'&&s.state!=='FAULT'&&c.owner!=='manual',
+    resume:ready&&!busy&&!halting&&stopped&&s.state==='PAUSED'&&!!s.saved_goal&&c.owner!=='manual'&&c.phase!=='FAULT',
+    reset:ready&&!busy&&!halting&&stopped&&['IDLE','PAUSED','FAULT'].includes(s.state)&&c.owner!=='manual',
+    requestManual:ready&&!busy&&!halting&&c.owner!=='manual'&&c.phase!=='FAULT',
+    releaseManual:manual&&!busy,
+    manualIntent:manual&&!busy&&c.phase==='MANUAL_READY',
+    stop:available};
+}
+
+export function createNavigationApi({ baseUrl = '', sessionId = crypto.randomUUID() } = {}) {
   const unavailable = async () => { throw new NavigationNotConnectedError(); };
   let running = false, timer = null, controller = null, generation = 0;
+  let latest=null, receivedAt=0, stoppedOnLoss=false, intentSequence=0;
   const listeners = new Set();
   const emit = value => { for (const listener of listeners) listener(value); };
   async function getStatus() {
+    const ownGeneration=generation;
     if (!baseUrl) throw new Error('请先填写导航服务地址');
     const url = new URL(baseUrl);
     if (!['http:','https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('导航服务地址无效');
@@ -48,32 +90,91 @@ export function createNavigationApi({ baseUrl = '' } = {}) {
       const response = await fetch(baseUrl.replace(/\/$/,'') + '/api/v1/status',
         {method:'GET',cache:'no-store',signal:ownController.signal});
       if (!response.ok) throw new Error('状态服务响应异常：' + response.status);
-      return validateEnvelope(await response.json());
+      const data=validateEnvelope(await response.json());
+      if(ownGeneration===generation){latest=data; receivedAt=performance.now();}
+      return data;
     } finally { clearTimeout(timeout); if (controller === ownController) controller = null; }
   }
+  const localControl = () => loopback(baseUrl) && latest?.read_only===false
+    && latest.capabilities?.environment==='local_simulation' && latest.capabilities.control_enabled===true;
+  const fresh = () => latest?.connection==='ONLINE' && performance.now()-receivedAt <
+    (latest.stale_after_seconds-latest.age_seconds)*1000;
+  async function post(path, body, keepalive=false) {
+    const abort=new AbortController(), timeout=setTimeout(()=>abort.abort(),1800);
+    try {
+      const response=await fetch(baseUrl.replace(/\/$/,'')+path,
+        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:abort.signal,keepalive});
+      const data=await response.json();
+      if(!response.ok && !data.request_id)throw new Error(data.error||'命令服务异常');
+      if (path==='/api/v1/command') {
+        const result=validateReceipt(data);
+        if(result.request_id!==body.request_id || result.bridge_instance_id!==body.bridge_instance_id || result.command!==body.command)
+          throw new Error('命令结果不匹配');
+        return result;
+      }
+      if(!response.ok)throw new Error(data.error||'控制会话心跳失败');
+      return data;
+    } finally {clearTimeout(timeout);}
+  }
+  async function send(command, payload={}, keepalive=false) {
+    if(!localControl())throw new NavigationNotConnectedError();
+    if(command!=='stop' && !fresh())throw new Error('任务状态过期，不能发送新操作');
+    const actionNames={request_manual:'requestManual',release_manual:'releaseManual',manual_intent:'manualIntent'};
+    const policy=controlPolicy(latest,sessionId,loopback(baseUrl));
+    if(command!=='stop'&&!policy[actionNames[command]||command])throw new Error('当前控制权或停车条件不允许该操作');
+    const body={...payload,schema_version:1,request_id:payload.request_id||crypto.randomUUID(),command,
+      session_id:sessionId,bridge_instance_id:latest.bridge_instance_id,control_epoch:latest.control.control_epoch};
+    return post('/api/v1/command',body,keepalive);
+  }
+  function stopOnLoss() {
+    if(!stoppedOnLoss && localControl() && latest.control.controller_id===sessionId){
+      stoppedOnLoss=true; void send('stop',{},true).catch(()=>{});
+    }
+  }
   async function poll(epoch) {
-    try { const data = await getStatus(); if (running && epoch === generation) emit(data); }
-    catch (error) { if (running && epoch === generation) emit({connection:'UNREACHABLE',mission:null,error:error.message}); }
+    try {
+      const data=await getStatus();
+      if(running && epoch===generation){
+        emit(data);
+        if(data.connection!=='ONLINE'){stopOnLoss();}
+        else if(localControl() && data.control.controller_id===sessionId){
+          stoppedOnLoss=false;
+          try {
+            await post('/api/v1/heartbeat',{schema_version:1,session_id:sessionId,
+              bridge_instance_id:data.bridge_instance_id,control_epoch:data.control.control_epoch});
+          } catch(error) {
+            // Ownership can advance between GET and heartbeat. Read the next
+            // status before deciding; this rejection never renews the lease.
+            if(error.message!=='STALE_SESSION_OR_EPOCH')throw error;
+          }
+        }
+      }
+    } catch (error) { if (running && epoch === generation){stopOnLoss();emit({connection:'UNREACHABLE',mission:null,error:error.message});} }
     finally { if (running && epoch === generation) timer = setTimeout(() => poll(epoch), 800); }
   }
   function disconnect() {
+    stopOnLoss();
     running = false; generation++; clearTimeout(timer); controller?.abort();
+    latest=null;
     emit({connection:'DISCONNECTED',mission:null});
   }
   return Object.freeze({
     baseUrl,
-    implemented: false,
-    readOnly: true,
+    sessionId,
+    get implemented(){return localControl();},
+    get readOnly(){return !localControl();},
+    get controlAvailable(){return localControl()&&fresh();},
     async connect() { if (!baseUrl) throw new Error('请先填写导航服务地址'); if (!running) {running=true; await poll(++generation);} },
     getStatus,
     getMap: unavailable,
-    start: unavailable,          // {request_id, map_id, goal: {x, y, yaw_deg}}
-    pause: unavailable,          // {request_id}
-    resume: unavailable,         // {request_id}
-    reset: unavailable,          // {request_id}
-    requestManual: unavailable,  // {request_id, control_epoch}
-    releaseManual: unavailable, // {request_id, control_epoch}
-    stop: unavailable,          // Cancel manual intent and pause mission; await confirmation.
+    start: payload=>send('start',payload),
+    pause: payload=>send('pause',payload),
+    resume: payload=>send('resume',payload),
+    reset: payload=>send('reset',payload),
+    requestManual: payload=>send('request_manual',payload),
+    releaseManual: payload=>send('release_manual',payload),
+    manualIntent: payload=>send('manual_intent',{...payload,intent_sequence:++intentSequence}),
+    stop: payload=>send('stop',payload,true),
     subscribeStatus(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     disconnect,
   });

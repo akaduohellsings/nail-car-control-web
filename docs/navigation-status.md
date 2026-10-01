@@ -1,5 +1,7 @@
 # 导航只读状态接入与暂停点
 
+最新：后续本地模拟命令与控制权模块已完成，见 [navigation-control.md](navigation-control.md)。本文件保留只读模块记录；实车接口依然只读，按钮仅在回环模拟控制服务下启用。
+
 更新：充电期间完成 12 个浏览器检查点和 4 项前端接口测试，过期、断连、重连、不同模式样例、异常/冲突、320/390 像素布局通过。本轮复用电脑上的实际桥接代码，不运行 ROS 或小车；真实适配器待命联调仍待开机后完成。测试工具为 `C:/Users/02/Desktop/小车/tools/local_navigation_status.py`，记录为 `C:/Users/02/Desktop/小车/docs/web_navigation_local_acceptance.md`。
 
 本轮截图：`navigation-status-stale.jpg`、`navigation-status-mobile.jpg`、`navigation-local-preview.jpg`。真实格式样例中的停车/就绪字段仅用于显示测试。测试服务已关闭，网页恢复小车地址并保持断开；运动按钮仍禁用。
