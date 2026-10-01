@@ -1,5 +1,7 @@
 # 钉探 Web 控制端
 
+2026-10-01 最新：只读状态页面完成本地过期、断连、恢复、模式与异常显示及窄屏验收（12 个浏览器检查点、4 项接口测试）。没有启动小车；小车真实适配器待命显示仍待联调。本轮没有修改页面业务代码。最新说明见 [docs/navigation-status.md](docs/navigation-status.md)。
+
 现有页面为原生 HTML/CSS/JavaScript，包含摄像头显示、方向控制与检测事件。代码位置：`C:\Users\02\Desktop\frontend_web_car`。
 
 ## Git 与开发基线

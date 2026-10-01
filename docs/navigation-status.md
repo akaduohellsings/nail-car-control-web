@@ -1,5 +1,9 @@
 # 导航只读状态接入与暂停点
 
+更新：充电期间完成 12 个浏览器检查点和 4 项前端接口测试，过期、断连、重连、不同模式样例、异常/冲突、320/390 像素布局通过。本轮复用电脑上的实际桥接代码，不运行 ROS 或小车；真实适配器待命联调仍待开机后完成。测试工具为 `C:/Users/02/Desktop/小车/tools/local_navigation_status.py`，记录为 `C:/Users/02/Desktop/小车/docs/web_navigation_local_acceptance.md`。
+
+本轮截图：`navigation-status-stale.jpg`、`navigation-status-mobile.jpg`、`navigation-local-preview.jpg`。真实格式样例中的停车/就绪字段仅用于显示测试。测试服务已关闭，网页恢复小车地址并保持断开；运动按钮仍禁用。
+
 2026-10-01：只读状态接入已实现，充电暂停，全部验收尚未完成。原手动页面及控制逻辑保持原样。
 
 `navigation-api.js` 校验公共任务协议 v1，通过 GET 轮询 `/api/v1/status`；连接需主动操作，断开时取消请求并忽略迟到响应。页面区分模拟、真实适配器与模拟清理，显示目标、任务阶段、尝试次数、告警及状态新鲜度。导航、暂停、恢复、接管、停止按钮均禁用。
