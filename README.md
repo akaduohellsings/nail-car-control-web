@@ -10,7 +10,7 @@
 
 说明见 [docs/web-navigation-design.md](docs/web-navigation-design.md)。已新增独立导航页面 `navigation.html`，包含地图占位、单点目标草稿、任务状态、手动接管流程、连接设置与操作记录。原手动页顶部增加导航入口，手动控制逻辑未修改。
 
-页面支持保存和恢复本地目标草稿、保存导航服务地址。导航、暂停、恢复、接管和停止按钮保持禁用，没有模拟实车状态，也不会连接小车。接口约定见 [docs/navigation-shell.md](docs/navigation-shell.md)。
+页面支持保存和恢复本地目标草稿、保存导航服务地址，并主动连接只读任务状态。显示模式、任务阶段、目标、告警与状态新鲜度；导航、暂停、恢复、接管和停止按钮保持禁用。最新接入及充电暂停点见 [docs/navigation-status.md](docs/navigation-status.md)，原页面壳设计见 [docs/navigation-shell.md](docs/navigation-shell.md)。
 
 建议先做单点导航与明确的手动接管，再做多点巡航。前端不能单凭 HTTP 成功认定导航已取消或车辆已停；后端需统一控制权和速度入口，手动结束后显式恢复。
 
