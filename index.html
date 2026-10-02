@@ -44,8 +44,9 @@
           <h3 class="card-title">小车状态</h3>
           <div class="status-row">
             <span class="status-dot status-dot--green" id="statusDot"></span>
-            <span class="status-text" id="statusText">等待连接</span>
+            <span class="status-text" id="statusText">手动控制未启用</span>
           </div>
+          <p id="taskSummary" role="status">任务服务未连接</p>
         </section>
 
         <!-- 摄像头图像 -->
@@ -68,7 +69,7 @@
         <section class="card control-card">
           <h3 class="card-title">命令控制窗口</h3>
           <div class="control-form">
-            <div class="form-params" id="formParams"></div>
+            <div class="form-params" id="formParams"><button id="connectTaskButton" type="button">连接任务状态</button> <button id="enableManualButton" type="button">启用独立手动</button> <button id="requestManualButton" type="button" disabled>申请接管</button> <button id="releaseManualButton" type="button" disabled>结束接管</button><p id="controlFeedback" role="status">独立手动需关闭导航；任务协调当前仅本地模拟。</p></div>
           </div>
           <div class="direction-pad">
             <button class="dpad-btn" data-cmd="left_forward">↖ 左前</button>

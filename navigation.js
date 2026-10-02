@@ -1,3 +1,4 @@
+import {stateLabels, connectionLabels} from './task-labels.js';
 import {loadConfig} from './connection-config.js';
 import {installSettings} from './connection-settings.js';
 import { createNavigationApi, controlPolicy } from './navigation-api.js';
@@ -29,10 +30,6 @@ function parseGoal(value) {
   }
   return goal;
 }
-const stateLabels = {IDLE:'待命',NAV_STARTING:'等待导航接受',NAVIGATING:'导航中',CANCELING:'取消导航中',
-  WAIT_STOP:'等待停车确认',CLEANING:'清理中',VERIFYING:'复查中',RESUMING:'恢复导航中',PAUSED:'已暂停',FAULT:'故障'};
-const connectionLabels = {ONLINE:'任务状态在线',WAITING:'服务在线 · 等待任务',STALE:'任务状态已过期',
-  INVALID:'状态格式异常',CONFLICT:'多个任务节点冲突',UNREACHABLE:'状态服务不可达',DISCONNECTED:'未连接状态服务'};
 let lastFeedback = '', currentStatus=null, pendingUi=null, manualHold=null, manualTimer=null;
 const operationNames={start:'开始导航',pause:'暂停任务',resume:'恢复导航',reset:'重置任务',
   request_manual:'申请手动接管',release_manual:'结束手动接管',stop:'停止并暂停'};

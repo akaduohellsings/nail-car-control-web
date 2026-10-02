@@ -62,3 +62,21 @@ test('late control reply after disconnect cannot re-enable commands',async()=>{
   assert.equal(api.controlAvailable,false);await assert.rejects(()=>api.start({}),NavigationNotConnectedError);
  }finally{api.disconnect();globalThis.fetch=previous;}
 });
+
+test('local freshness deadline disables control before a stalled poll returns',async()=>{
+ const previous=globalThis.fetch,received=[];let reads=0;
+ globalThis.fetch=async(url,options)=>{
+  if(options.method==='GET'){
+   reads++;const d=status();d.stale_after_seconds=.05;
+   return {ok:true,json:async()=>d};
+  }
+  return {ok:true,json:async()=>({status:'accepted'})};
+ };
+ const api=createNavigationApi({baseUrl:'http://127.0.0.1:8093',sessionId:'A'});
+ api.subscribeStatus(d=>received.push(d.connection));
+ try{
+  await api.connect();assert.equal(api.controlAvailable,true);
+  await new Promise(done=>setTimeout(done,180));
+  assert.equal(reads,1);assert.equal(api.controlAvailable,false);assert.ok(received.includes('STALE'));
+ }finally{api.disconnect();globalThis.fetch=previous;}
+});

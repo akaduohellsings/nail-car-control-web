@@ -75,7 +75,7 @@ export function controlPolicy(data, sessionId, locallyAllowed = true) {
 
 export function createNavigationApi({ baseUrl = '', sessionId = crypto.randomUUID() } = {}) {
   const unavailable = async () => { throw new NavigationNotConnectedError(); };
-  let running = false, timer = null, controller = null, generation = 0;
+  let running = false, timer = null, freshnessTimer = null, controller = null, generation = 0;
   let latest=null, receivedAt=0, stoppedOnLoss=false, intentSequence=0;
   const listeners = new Set();
   const emit = value => { for (const listener of listeners) listener(value); };
@@ -154,7 +154,7 @@ export function createNavigationApi({ baseUrl = '', sessionId = crypto.randomUUI
   }
   function disconnect() {
     stopOnLoss();
-    running = false; generation++; clearTimeout(timer); controller?.abort();
+    running = false; generation++; clearTimeout(timer); clearInterval(freshnessTimer); controller?.abort();
     latest=null;
     emit({connection:'DISCONNECTED',mission:null});
   }
@@ -164,7 +164,19 @@ export function createNavigationApi({ baseUrl = '', sessionId = crypto.randomUUI
     get implemented(){return localControl();},
     get readOnly(){return !localControl();},
     get controlAvailable(){return localControl()&&fresh();},
-    async connect() { if (!baseUrl) throw new Error('请先填写导航服务地址'); if (!running) {running=true; await poll(++generation);} },
+    async connect() {
+      if (!baseUrl) throw new Error('请先填写导航服务地址');
+      if (!running) {
+        running=true;
+        freshnessTimer=setInterval(()=>{
+          if(latest?.connection==='ONLINE'&&!fresh()){
+            latest={...latest,connection:'STALE',age_seconds:latest.age_seconds+(performance.now()-receivedAt)/1000};
+            stopOnLoss();emit(latest);
+          }
+        },100);
+        await poll(++generation);
+      }
+    },
     getStatus,
     getMap: unavailable,
     start: payload=>send('start',payload),
