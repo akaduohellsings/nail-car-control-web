@@ -1,3 +1,4 @@
+import {createVideoMonitor, createEventMonitor} from './service-monitor.js';
 import {loadConfig} from './connection-config.js';
 import {installSettings} from './connection-settings.js';
 import {createNavigationApi, controlPolicy} from './navigation-api.js';
@@ -124,7 +125,7 @@ $('enableManualButton').addEventListener('click',()=>{
 function applyConfig(value){
   input.cancel();standaloneEnabled=false;pending=null;unsubscribe();api.disconnect();config=value;
   api=createNavigationApi({baseUrl:config.navigationUrl});unsubscribe=api.subscribeStatus(renderTask);
-  renderTask({connection:'DISCONNECTED',mission:null});setVideoAddress();
+  renderTask({connection:'DISCONNECTED',mission:null});restartMonitors();
   addMessage('system','共用连接设置已更新，请重新连接任务状态。');
 }
 installSettings($('settingsButton'),applyConfig);
@@ -135,21 +136,32 @@ function abandon(){
 }
 window.addEventListener('blur',abandon);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)abandon();});
-window.addEventListener('pagehide',()=>{abandon();unsubscribe();api.disconnect();});
+window.addEventListener('pagehide',()=>{abandon();unsubscribe();api.disconnect();video.stop();events.stop();});
 
-// Video and detection monitoring are independent from control ownership.
-function setVideoAddress(){$('cameraImage').src=config.videoUrl+'/stream?topic=/detected_image';}
-setVideoAddress();
-$('cameraTime').textContent=now();setInterval(()=>$('cameraTime').textContent=now(),1000);
-let lastCount=0,lastDetected=false;
-setInterval(async()=>{
-  try{
-    const response=await fetch(config.eventsUrl+'/events');
-    if(!response.ok)throw new Error('事件服务异常');
-    const data=await response.json();
-    if(data.detected&&(!lastDetected||data.count!==lastCount))addEvent('🔩',data.message);
-    lastDetected=data.detected;lastCount=data.count;
-  }catch{/* The next optimization supplies explicit per-service freshness. */}
-},1000);
+// Reception timestamps are separate from ROS source freshness and motion status.
+let lastEventState='';
+const video=createVideoMonitor({image:$('cameraImage'),onStatus:data=>{
+  const labels={PAUSED:'画面已暂停',CONNECTING:'正在连接视频',UNVERIFIED:'帧时间未提供',ONLINE:'正在接收画面',UNREACHABLE:'视频不可用'};
+  $('videoStatus').textContent=labels[data.state]+(data.retrySeconds?' · '+data.retrySeconds+' 秒后重试':'');
+  $('cameraTime').textContent=data.receivedAt?'接收 '+new Date(data.receivedAt).toLocaleTimeString('zh-CN',{hour12:false}):'实时性未确认';
+  $('videoStatus').title=data.state==='UNVERIFIED'?'旧视频服务未提供可读取的帧时间，无法确认画面是否冻结。':data.error||'';
+}});
+const events=createEventMonitor({onStatus:data=>{
+  const labels={ONLINE:data.sourceFresh===true?'检测源数据新鲜':'检测接口可达 · 源时间未提供',STALE:'检测数据已过期',UNREACHABLE:'检测事件服务不可达'};
+  $('detectionStatus').textContent=labels[data.state];
+  $('detectionStatus').title=data.receivedAt?'最近接收：'+new Date(data.receivedAt).toLocaleTimeString('zh-CN'):data.error||'';
+  if(data.state!==lastEventState){addMessage('system',labels[data.state]);lastEventState=data.state;}
+},onEvent:data=>addEvent('🔩',data.message)});
+function restartMonitors(){
+  if(document.hidden)return;
+  video.start(config.videoUrl,$('videoTopic').value);events.start(config.eventsUrl);
+}
+$('videoTopic').addEventListener('change',()=>video.start(config.videoUrl,$('videoTopic').value));
+$('retryVideoButton').addEventListener('click',()=>video.start(config.videoUrl,$('videoTopic').value));
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){video.stop();events.stop();$('detectionStatus').textContent='检测接收已暂停';}
+  else restartMonitors();
+});
+restartMonitors();
 renderTask({connection:'DISCONNECTED',mission:null});
 addMessage('system','手动与导航共用任务状态；切换页面不会自动恢复运动。');

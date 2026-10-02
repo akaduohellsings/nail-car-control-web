@@ -51,7 +51,7 @@
 
         <!-- 摄像头图像 -->
         <section class="card camera-card">
-          <h3 class="card-title">摄像头实时画面</h3>
+          <h3 class="card-title">摄像头实时画面 <select id="videoTopic" aria-label="画面来源"><option value="/detected_image">YOLO 画面</option><option value="/camera/color/image_raw">原始画面</option></select> <button id="retryVideoButton" type="button">重连</button></h3>
           <div class="camera-feed" id="cameraFeed">
             <img 
                 id="cameraImage"
@@ -59,8 +59,8 @@
                 alt="YOLO检测视频"
             />
             <div class="camera-overlay">
-              <span class="camera-rec">● REC</span>
-              <span class="camera-time" id="cameraTime">00:00:00</span>
+              <span class="camera-rec" id="videoStatus">正在连接视频</span>
+              <span class="camera-time" id="cameraTime">实时性未确认</span>
             </div>
           </div>
         </section>
@@ -90,6 +90,7 @@
         <!-- 关键识别事件（移至右侧，并上移） -->
         <section class="card events-card">
           <h3 class="card-title">关键识别事件</h3>
+          <p id="detectionStatus" role="status">等待检测事件接口</p>
           <ul class="events-list" id="eventsList">
             <!-- 动态由后端推送填充 -->
           </ul>
