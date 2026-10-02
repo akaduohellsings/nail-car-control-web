@@ -61,7 +61,11 @@ const assert=require('node:assert/strict');
     await page.mouse.up();
     await page.waitForFunction(async()=>{const d=await(await fetch('http://127.0.0.1:8093/api/v1/status')).json();return d.control.manual_direction==='stop';});
     await page.click('#releaseManualButton');
-    await page.waitForFunction(()=>document.querySelector('[data-cmd=forward]').disabled);
+    await page.waitForFunction(async()=>{
+      const d=await(await fetch('http://127.0.0.1:8093/api/v1/status')).json();
+      return d.control.controller_id===null&&d.control.owner==='none'&&d.control.phase==='PAUSED'
+        &&d.control.command_result?.command==='release_manual'&&d.control.command_result.status==='succeeded';
+    });
     const snapshot=await(await page.request.get('http://127.0.0.1:8093/api/v1/status')).json();
     assert.equal(snapshot.mission.state,'PAUSED');
     assert.equal(snapshot.control.manual_direction,'stop');

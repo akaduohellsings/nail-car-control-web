@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {addressesFor,loadConfig,validateConfig} from '../connection-config.js';
+import {addressesFor,loadConfig,validateConfig,isSimulationPage} from '../connection-config.js';
 
 test('USB preset replaces every robot service, including bracketed IPv6', () => {
   const usb=addressesFor('http://192.168.55.1');
@@ -15,4 +15,16 @@ test('invalid URLs cannot become control destinations', () => {
 test('old navigation settings migrate and broken storage recovers', () => {
   assert.equal(loadConfig({getItem:key=>key==='nail.navigation.serviceUrl.v1'?'http://127.0.0.1:8093':null}).navigationUrl,'http://127.0.0.1:8093');
   assert.equal(loadConfig({getItem:()=>'{broken'}).controlUrl,'http://192.168.0.100:5000');
+});
+
+test('simulation preview uses only loopback services and leaves saved settings untouched',()=>{
+  const previous=globalThis.location;
+  globalThis.location={hostname:'localhost',origin:'http://localhost:8000',search:'?simulation=1'};
+  try{
+    const config=loadConfig({getItem:()=>{throw Error('Storage should not be read');}});
+    assert.equal(config.manualMode,'coordinated');
+    assert.equal(config.videoUrl,'http://localhost:8000');
+    assert.equal(config.navigationUrl,'http://localhost:8000');
+    assert.equal(isSimulationPage({hostname:'192.168.55.1',search:'?simulation=1'}),false);
+  }finally{if(previous===undefined)delete globalThis.location;else globalThis.location=previous;}
 });

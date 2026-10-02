@@ -59,3 +59,8 @@ typings/
 
 # next.js build output
 .next
+
+# Local web preview and Python cache
+.local/
+__pycache__/
+*.pyc

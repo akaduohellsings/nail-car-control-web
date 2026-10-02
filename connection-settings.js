@@ -1,4 +1,4 @@
-import {addressesFor, PRESETS, loadConfig, saveConfig} from './connection-config.js';
+import {addressesFor, PRESETS, loadConfig, saveConfig, isSimulationPage} from './connection-config.js';
 
 export function installSettings(button, onSaved) {
   const dialog = document.createElement('dialog');
@@ -18,6 +18,12 @@ export function installSettings(button, onSaved) {
     <p data-error role="alert"></p><button type="submit">保存设置</button></form>`;
   document.body.append(dialog);
   const form = dialog.querySelector('form');
+  if(isSimulationPage()){
+    dialog.querySelector('strong').textContent='本地模拟预览 · 原连接设置保留';
+    for(const field of form.querySelectorAll('input,select,button[type=submit]'))field.disabled=true;
+    for(const link of document.querySelectorAll('a[href="index.html"],a[href="navigation.html"]'))
+      link.href=link.getAttribute('href')+'?simulation=1';
+  }
   const fields = ['robotUrl','videoUrl','controlUrl','eventsUrl','navigationUrl','manualMode'];
   const fill = config => {for (const key of fields) form.elements[key].value = config[key];};
   const applyRobot = () => {
@@ -39,7 +45,7 @@ export function installSettings(button, onSaved) {
     } catch(error) {dialog.querySelector('[data-error]').textContent='未保存：'+error.message;}
   });
   window.addEventListener('storage', event => {
-    if (event.key === 'nail.connection.v1') {dialog.close(); onSaved(loadConfig());}
+    if (event.key === 'nail.connection.v1' && !isSimulationPage()) {dialog.close(); onSaved(loadConfig());}
   });
   return dialog;
 }

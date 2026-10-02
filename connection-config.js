@@ -1,6 +1,10 @@
 /** Shared addresses; saving settings never starts hardware or sends commands. */
 export const CONFIG_KEY = 'nail.connection.v1';
 export const PRESETS = { hotspot: 'http://192.168.0.100', usb: 'http://192.168.55.1' };
+export function isSimulationPage(locationRef = globalThis.location) {
+  return !!locationRef && ['localhost','127.0.0.1','[::1]'].includes(locationRef.hostname)
+    && new URLSearchParams(locationRef.search).get('simulation') === '1';
+}
 export function normalizeUrl(value, {optional = false} = {}) {
   if (!value && optional) return '';
   const url = new URL(value);
@@ -23,6 +27,8 @@ export function validateConfig(value) {
   return config;
 }
 export function loadConfig(storage = localStorage) {
+  if(isSimulationPage())return validateConfig({robotUrl:location.origin,videoUrl:location.origin,
+    controlUrl:location.origin,eventsUrl:location.origin,navigationUrl:location.origin,manualMode:'coordinated'});
   try {
     const saved = storage.getItem(CONFIG_KEY);
     if (saved) return validateConfig(JSON.parse(saved));
