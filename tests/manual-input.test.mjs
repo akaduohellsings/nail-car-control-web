@@ -23,3 +23,10 @@ test('release during a pending HTTP move prevents another repeat',async()=>{
   button.dispatchEvent(press());control.cancel();resolve();await new Promise(done=>setTimeout(done,180));
   assert.deepEqual(calls,['move','stop']);
 });
+
+test('release-manual operation can cancel the hold without racing another stop request',async()=>{
+  const button=new Button('forward'),calls=[];
+  const control=bindManualInput({buttons:[button],canMove:()=>true,move:async()=>calls.push('move'),stop:()=>calls.push('stop'),documentRef:new EventTarget(),windowRef:new EventTarget()});
+  button.dispatchEvent(press());control.cancel(false);await Promise.resolve();
+  assert.deepEqual(calls,['move']);assert.equal(control.holding,false);
+});

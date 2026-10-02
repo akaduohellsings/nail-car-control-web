@@ -11,7 +11,8 @@ export function createEventMonitor({onStatus,onEvent,fetcher=fetch}) {
         if(!response.ok)throw new Error('HTTP '+response.status);
         const data=await response.json();
         if(epoch!==generation)return;
-        if(typeof data.detected!=='boolean'||!Number.isSafeInteger(data.count)||data.count<0||typeof data.message!=='string')
+        if(typeof data.detected!=='boolean'||!Number.isSafeInteger(data.count)||data.count<0||typeof data.message!=='string'
+          ||data.detected!==(data.count>0)||(data.event_id!==undefined&&(typeof data.event_id!=='string'||!data.event_id)))
           throw new Error('检测事件格式异常');
         const stamp=data.observed_at_ros_ns;
         let fresh=null;

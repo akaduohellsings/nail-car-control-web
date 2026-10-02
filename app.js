@@ -85,14 +85,18 @@ let unsubscribe=api.subscribeStatus(renderTask);
 async function legacyCommand(direction,baseUrl=config.controlUrl){
   const abort=new AbortController(), timer=setTimeout(()=>abort.abort(),1800);
   try{
-    const response=await fetch(`${baseUrl}/cmd?move=${encodeURIComponent(direction)}`,{cache:'no-store',signal:abort.signal});
+    const response=await fetch(`${baseUrl}/cmd?move=${encodeURIComponent(direction)}`,{cache:'no-store',signal:abort.signal,keepalive:direction==='stop'});
     if(!response.ok)throw new Error('控制服务返回 '+response.status);
     addMessage('cmd',`请求已接收：${CMD_LABELS[direction]}（实际动作未确认）`);
   }finally{clearTimeout(timer);}
 }
 async function stop(){
   if(config.manualMode==='coordinated'){
-    if(api.implemented){const result=await api.stop();showReceipt(result);}
+    if(api.implemented){
+      const selected=api,id=crypto.randomUUID();pending={id,bridge:task?.bridge_instance_id};updateControls();
+      const result=await selected.stop({request_id:id});
+      if(selected===api&&pending?.id===id){showReceipt(result);updateControls();}
+    }
     else throw new Error('协调服务未连接或仅支持只读，无法请求停车');
   }else await legacyCommand('stop');
 }
@@ -107,7 +111,7 @@ input=bindManualInput({buttons,canMove,stopAll:stop,repeat:()=>config.manualMode
   onError:error=>{standaloneEnabled=false;addMessage('system','控制结果未确认：'+error.message);updateControls();}
 });
 async function operation(method){
-  input.cancel();const selected=api,id=crypto.randomUUID();pending={id,bridge:task?.bridge_instance_id};updateControls();
+  input.cancel(false);const selected=api,id=crypto.randomUUID();pending={id,bridge:task?.bridge_instance_id};updateControls();
   try{
     const result=await selected[method]({request_id:id});
     if(selected===api&&pending?.id===id){showReceipt(result);updateControls();}
@@ -137,6 +141,7 @@ function abandon(){
 window.addEventListener('blur',abandon);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)abandon();});
 window.addEventListener('pagehide',()=>{abandon();unsubscribe();api.disconnect();video.stop();events.stop();});
+window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
 
 // Reception timestamps are separate from ROS source freshness and motion status.
 let lastEventState='';

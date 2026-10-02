@@ -2,9 +2,9 @@
 export function bindManualInput({buttons, canMove, move, stop, stopAll = stop, repeat = () => false, onError = () => {},
   documentRef = document, windowRef = window}) {
   let held = null, timer = null;
-  function cancel() {
+  function cancel(sendStop=true) {
     const previous=held; held=null; clearTimeout(timer);
-    if (previous) Promise.resolve(stop()).catch(onError);
+    if (previous&&sendStop) Promise.resolve(stop()).catch(onError);
   }
   function begin(direction) {
     if (direction === 'stop') {held=null;clearTimeout(timer);Promise.resolve(stopAll()).catch(onError);return;}

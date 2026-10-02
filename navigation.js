@@ -118,6 +118,7 @@ $('connectButton').addEventListener('click', async () => {
 });
 $('disconnectButton').addEventListener('click', () => { api.disconnect(); resetConnection(); });
 window.addEventListener('pagehide', () => { unsubscribe(); api.disconnect(); });
+window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
 async function submitOperation(method, payload={}){
   const selectedApi=api;
   stopManual(false);
