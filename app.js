@@ -1,3 +1,6 @@
+import {loadConfig} from './connection-config.js';
+import {installSettings} from './connection-settings.js';
+
 /* ============================================================
    钉探 – 智能小车控制台  |  app.js
    ============================================================ */
@@ -8,6 +11,14 @@
   /* ── helpers ─────────────────────────────────────────────── */
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
+  let config = loadConfig();
+  const setVideoAddress = () => {$('#cameraImage').src = config.videoUrl + '/stream?topic=/detected_image';};
+  installSettings($('#settingsButton'), value => {
+    if (moving) {sendCommand('stop'); moving=false;}
+    config=value; setVideoAddress();
+    addMessage('system', '连接设置已保存，手动页与导航页共用。');
+  });
+  setVideoAddress();
 
   function now() {
     const d = new Date();
@@ -49,7 +60,7 @@
 
   /* ── send command ────────────────────────────────────────── */
   function sendCommand(cmd) {
-    fetch(`http://192.168.0.100:5000/cmd?move=${cmd}`)
+    fetch(`${config.controlUrl}/cmd?move=${encodeURIComponent(cmd)}`)
       .then(response => {
         if (response.ok) {
           addMessage('cmd', `发送命令：${CMD_LABELS[cmd] || cmd}`);
@@ -161,7 +172,7 @@
 
   setInterval(()=>{
 
-    fetch("http://192.168.0.100:5001/events")
+    fetch(config.eventsUrl + '/events')
 
     .then(response => response.json())
     .then(data => {

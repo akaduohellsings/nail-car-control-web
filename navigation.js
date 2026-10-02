@@ -1,7 +1,9 @@
+import {loadConfig} from './connection-config.js';
+import {installSettings} from './connection-settings.js';
 import { createNavigationApi, controlPolicy } from './navigation-api.js';
 
 const $ = (id) => document.getElementById(id);
-const KEYS = { goal: 'nail.navigation.goalDraft.v1', service: 'nail.navigation.serviceUrl.v1' };
+const KEYS = { goal: 'nail.navigation.goalDraft.v1' };
 const log = (message, error = false) => {
   const item = document.createElement('li');
   if (error) item.className = 'error';
@@ -101,7 +103,7 @@ function renderStatus(data) {
   }
   updateControls();
 }
-let api = createNavigationApi({ baseUrl: read(KEYS.service) || (['8091','8093'].includes(location.port) ? location.origin : '') });
+let api = createNavigationApi({ baseUrl: loadConfig().navigationUrl });
 let unsubscribe = api.subscribeStatus(renderStatus);
 function resetConnection() {
   stopManual(false);
@@ -200,29 +202,11 @@ $('clearDraft').addEventListener('click', () => {
   catch { log('无法清除已保存的草稿，请检查浏览器存储权限。', true); return; }
   $('goalForm').reset(); $('draftStatus').textContent = '尚未保存目标草稿'; log('已清空本地目标草稿。');
 });
-$('settingsButton').addEventListener('click', () => {
-  $('serviceUrl').value = api.baseUrl; $('settingsError').textContent = ''; $('settingsDialog').showModal();
-});
-$('closeSettings').addEventListener('click', () => $('settingsDialog').close());
-$('settingsForm').addEventListener('submit', (event) => {
-  event.preventDefault();
-  let baseUrl = $('serviceUrl').value.trim();
-  try {
-    if (baseUrl) {
-      const parsed = new URL(baseUrl);
-      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) {
-        throw new Error('请输入不含凭据、查询参数或片段的 HTTP/HTTPS 服务地址');
-      }
-      baseUrl = parsed.href.replace(/\/$/, '');
-    }
-    if (!save(KEYS.service, baseUrl)) return;
-    unsubscribe(); api.disconnect();
-    api = createNavigationApi({ baseUrl });
-    unsubscribe = api.subscribeStatus(renderStatus);
-    resetConnection();
-    $('settingsDialog').close();
-    log(baseUrl ? '导航服务地址已保存。点击连接任务服务开始读取。' : '已清空导航服务地址。');
-  } catch (error) { $('settingsError').textContent = error.message; }
+installSettings($('settingsButton'), config => {
+  unsubscribe(); api.disconnect();
+  api=createNavigationApi({baseUrl:config.navigationUrl});
+  unsubscribe=api.subscribeStatus(renderStatus); resetConnection();
+  log('共用连接设置已更新，点击连接任务服务重新获取状态。');
 });
 $('clearLog').addEventListener('click', () => { $('operationLog').replaceChildren(); log('本地操作记录已清空。'); });
 log('导航页面已加载。实车接口只读，控制操作仅限本地模拟服务。');

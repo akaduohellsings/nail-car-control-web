@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>钉探 · 导航控制</title>
   <link rel="stylesheet" href="navigation.css" />
+  <link rel="stylesheet" href="connection-settings.css" />
 </head>
 <body>
   <header class="topbar">
@@ -52,9 +53,6 @@
     </div>
     <footer>钉探 · 导航控制 <span>单点导航优先 · 多点巡航后续接入</span></footer>
   </main>
-  <dialog id="settingsDialog" aria-labelledby="settingsTitle">
-    <form id="settingsForm"><div class="dialog-heading"><h2 id="settingsTitle">连接设置</h2><button class="text-button" type="button" id="closeSettings" aria-label="关闭设置">✕</button></div><p>保存地址后，点击“连接任务服务”开始读取。</p><label>导航服务地址<input type="url" id="serviceUrl" placeholder="http://192.168.55.1:8091" /></label><p class="form-hint">实车地址仅允许读取状态。控制功能只对电脑上的本地模拟服务开放，不连接旧手动接口。</p><p id="settingsError" role="alert"></p><div class="dialog-actions"><button class="button primary" type="submit">保存配置</button></div></form>
-  </dialog>
   <script type="module" src="navigation.js"></script>
 </body>
 </html>

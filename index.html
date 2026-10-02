@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>钉探 - 智能小车远程控制</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="connection-settings.css" />
 </head>
 <body>
   <div class="app">
@@ -15,6 +16,7 @@
         <span class="logo-text">钉探</span>
       </div>
       <div class="header-subtitle">智能小车道路钉子识别系统</div>
+      <button id="settingsButton" type="button">连接设置</button>
       <a href="navigation.html" style="margin-left:auto;color:var(--accent2);white-space:nowrap;text-decoration:none">导航控制 →</a>
     </header>
 
@@ -52,7 +54,7 @@
           <div class="camera-feed" id="cameraFeed">
             <img 
                 id="cameraImage"
-                src="http://192.168.0.100:8080/stream?topic=/detected_image"
+                
                 alt="YOLO检测视频"
             />
             <div class="camera-overlay">
@@ -103,6 +105,6 @@
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
