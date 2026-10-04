@@ -1,6 +1,6 @@
 # Web 单点导航（2026-10-04）
 
-本轮完成电脑网页与导航接口实现。保留现有布局与 Type-C 地址；小车关机充电，尚未部署本轮车端代码，尚未验证真实 Nav2 通信或行驶。
+电脑网页与车端接口已部署，通过 Type-C 实际读取小车状态；保留现有布局。车端只读服务在线，尚未启动底盘或实际 Nav2，地图、定位与行驶尚未验收。热点暂未被小车扫描到，Type-C 继续保留。
 
 ## 网页操作
 
@@ -14,21 +14,27 @@
 
 本轮真实接口只支持 start/pause/resume/reset/stop。手动接管、拾取、多点巡航、路径叠加与地图缩放未启用。之前的本地模拟接管仍可使用；旧只读服务保持兼容，不能仅换地址就开启实车控制。
 
-## 车端接入准备
+## 车端连接配置
 
 小车代码位于相邻 `小车/robot_src/nail_mission_ros2`。新增 `navigation_control_bridge`，复用现有 Nav2Backend 的目标、取消与停车逻辑；不启动底盘、雷达、Nav2、相机或拾取，不订阅稳定钉子事件。Web 请求由 HTTP 线程入队，在 ROS 线程执行，避免并发修改任务。
 
-充电后先通过 Type-C 部署、编译、运行 Domain 83 的隔离假 Nav2/HTTP 测试，再在实际导航环境静止联调。不能与 mission_nav2、旧 Web 手动速度控制或其他导航客户端同时控制车辆。
+已通过 Type-C 部署、编译，并运行 Domain 83 的隔离假 Nav2/HTTP 测试。实际导航环境仍待静止联调。不能与 mission_nav2、旧 Web 手动速度控制或其他导航客户端同时控制车辆。
 
-准备好的入口（小车上运行）默认只读：
+小车当前配置在 `/home/wheeltec/nail_config/navigation_web.json`，模板在 `nail_mission_ros2/config/navigation_web.example.json`。配置只含连接与导航选项，不保存 Wi-Fi 名称或密码。启动入口默认只读；已有后台实例运行时先停止它，避免端口冲突：
 
 ```bash
 source /opt/ros/humble/setup.bash
 source /home/wheeltec/wheeltec_ros2/install/setup.bash
-ros2 run nail_mission_ros2 navigation_control_bridge --bind 192.168.55.1 --port 8091
+ros2 run nail_mission_ros2 navigation_control_bridge --config /home/wheeltec/nail_config/navigation_web.json --disable-control
 ```
 
-真实功能联调时才追加 `--enable-control`。需要已启动并正确定位的 Nav2、`/map`、`map -> base_link` 的新鲜 TF 和 `/odom_combined`。默认仅允许本机与 Type-C 电脑地址 `192.168.55.100` 请求，允许网页来源 localhost/127.0.0.1 的 8000 端口；热点迁移时要同时更新绑定地址、允许客户端和 Web 地址，不能沿用历史 `192.168.0.100` 假定。
+当前后台只读实例记录在 `/home/wheeltec/nail_config/navigation_web_process.json`，日志在同目录 `navigation_web.log`。未设置开机自启；重启小车后需重新启动服务。
+
+配置项 `bind`、`port`、`allowed_client`、`allowed_origin` 可分别修改绑定地址、端口、允许访问的电脑 IP 与网页来源。当前模板为 Type-C：小车 `192.168.55.1`、电脑 `192.168.55.100`、端口 8091。切换热点后填实际获取的 IP，再重启服务；网页“连接设置 → 服务地址”也可修改导航地址。Wi-Fi 密码由小车网络管理器管理，不进入这些文件。不提供配置文件时，服务只绑定回环地址并只允许回环客户端。
+
+显式命令行参数覆盖 JSON 配置。真实联调时使用 `--enable-control` 替换 `--disable-control`；需要已启动并正确定位的 Nav2、`/map`、`map -> base_link` 的新鲜 TF 和 `/odom_combined`，并先确认现场与运动授权。热点 IP 需实际获取，不能沿用历史 `192.168.0.100` 假定。
+
+电脑上的部署工具支持 `python tools/deploy_navigation_control.py --host 当前小车IP`，Type-C 和无线共用入口。
 
 ## 已验证与待验证
 
@@ -36,4 +42,6 @@ ros2 run nail_mission_ros2 navigation_control_bridge --bind 192.168.55.1 --port 
 
 浏览器使用本机 8094 的导航接口预览服务验证了地图加载/选点、开始接收与接受反馈、暂停停车确认、原目标恢复、停止，以及 390 像素宽度无横向溢出。预览服务的地图、位置、导航和停车均为模拟，不导入 ROS 或 SSH。
 
-新增三项真实 ROS Action/HTTP 隔离测试已编写，因小车关机尚未运行。地图/TF 的实际话题、车端安装编译、真实停车时序与实际运动仍待充电后验收。截图 `navigation-typec-preview.png` 仅作为网页预览证据。
+本次增加连接配置校验后，车端 9 项接口测试与 3 项 HTTP/ROS Action 隔离测试通过。后者使用假的 Nav2 服务验证实际 ROS 通信，未启动硬件、未发送实车目标。车端单包编译通过。
+
+浏览器连接实际 Type-C 服务，显示任务状态在线、真实单点导航适配、导航服务未就绪、定位未确认，开始按钮禁用。截图 `navigation-typec-readonly.png` 是真实状态读取；`navigation-typec-preview.png` 仍只作为模拟页面预览证据。实际地图/TF、真实停车时序与实际运动仍待验收。
