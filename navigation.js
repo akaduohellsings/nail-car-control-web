@@ -82,10 +82,14 @@ function renderStatus(data) {
   $('taskBadge').textContent = online ? '实时' : (data.connection === 'STALE' ? '已过期' : '未确认');
   $('modeNotice').textContent = s ? (s.mode === 'mock' ? '模拟任务 · 只读' : '真实导航适配 · 清理模拟') : '只读状态';
   const c=data.control;
-  if(online&&data.navigation?.map_id&&loadedMapId!==data.navigation.map_id&&!mapLoading){
+  if(online&&(!data.navigation?.map_id||data.navigation.map_id==='waiting-for-map')){
+    loadedMapId=null;mapView.clear();
+  }
+  if(online&&data.navigation?.map_id&&data.navigation.map_id!=='waiting-for-map'&&loadedMapId!==data.navigation.map_id&&!mapLoading){
     mapLoading=true;const selectedApi=api,expected=data.navigation.map_id;
     void api.getMap().then(map=>{
       if(api!==selectedApi||currentStatus?.connection!=='ONLINE'||currentStatus?.navigation?.map_id!==expected)return;
+      if(!map)return;
       if(map?.map_id!==expected)throw new Error('地图已切换，正在等待最新地图');
       mapView.setMap(map);loadedMapId=map.map_id;updateControls();
     }).catch(error=>log(error.message,true)).finally(()=>{mapLoading=false;});
