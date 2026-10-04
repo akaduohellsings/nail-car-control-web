@@ -63,6 +63,22 @@ test('late control reply after disconnect cannot re-enable commands',async()=>{
  }finally{api.disconnect();globalThis.fetch=previous;}
 });
 
+test('real Type-C navigation requires explicit capability and keeps manual control disabled',async()=>{
+ const previous=globalThis.fetch,calls=[];const real=status();
+ real.mission.mode='nav2_with_mock_cleaning';
+ real.capabilities={schema_version:1,environment:'robot_navigation',control_enabled:true,commands:['start','pause','resume','reset','stop']};
+ validateEnvelope(real);assert.equal(controlPolicy(real,'A').start,true);assert.equal(controlPolicy(real,'A').requestManual,false);
+ globalThis.fetch=async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>options.method==='GET'?real:
+  ({schema_version:1,request_id:'real-r',bridge_instance_id:'local-bridge',command:'start',status:'pending',reason:null})};};
+ const api=createNavigationApi({baseUrl:'http://192.168.55.1:8091',sessionId:'A'});
+ try{await api.getStatus();assert.equal(api.controlAvailable,true);
+  const result=await api.start({request_id:'real-r',map_id:'local-demo',goal:{x:.4,y:0,yaw_deg:0}});
+  assert.equal(result.status,'pending');assert.equal(calls.length,2);
+  await assert.rejects(()=>api.requestManual(),/不允许/);assert.equal(calls.length,2);
+  const invalid=structuredClone(real);invalid.capabilities.commands.push('manual_intent');assert.throws(()=>validateEnvelope(invalid));
+ }finally{api.disconnect();globalThis.fetch=previous;}
+});
+
 test('local freshness deadline disables control before a stalled poll returns',async()=>{
  const previous=globalThis.fetch,received=[];let reads=0;
  globalThis.fetch=async(url,options)=>{

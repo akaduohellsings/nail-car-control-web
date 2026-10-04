@@ -1,6 +1,6 @@
-/** Task v1 transport. Control is allowed only for an advertised loopback simulator. */
+/** Task v1 transport. Real navigation requires an explicit navigation capability. */
 export class NavigationNotConnectedError extends Error {
-  constructor() { super('本阶段只读，未向小车发送控制命令'); this.name = 'NavigationNotConnectedError'; }
+  constructor() { super('当前服务未开放导航控制，未向小车发送命令'); this.name = 'NavigationNotConnectedError'; }
 }
 const statusFields = ['schema_version','mode','source_instance_id','sequence','observed_at_ros_ns',
   'state','saved_goal','target_event_id','attempt','max_attempts','alarm','pending','cleaning_mode',
@@ -30,10 +30,19 @@ export function validateEnvelope(data) {
         || typeof s.pending.request_id !== 'string' || !s.pending.request_id)) invalid();
   }
   if (data.connection === 'ONLINE' && (!s || data.age_seconds === null || data.age_seconds > data.stale_after_seconds)) invalid();
+  if(data.navigation!==undefined){
+    const n=data.navigation;
+    if(!n || typeof n.map_id!=='string' || (n.robot_pose!==null
+      && !['x','y','yaw'].every(key=>Number.isFinite(n.robot_pose?.[key]))))invalid();
+  }
   if (data.read_only === false) {
     const c = data.control, cap = data.capabilities;
-    if (!cap || cap.schema_version !== 1 || cap.environment !== 'local_simulation' || cap.control_enabled !== true
-        || !c || c.schema_version !== 1 || (s && s.mode !== 'mock')
+    const simulation=cap?.environment==='local_simulation' && s?.mode==='mock';
+    const robot=cap?.environment==='robot_navigation' && s?.mode==='nav2_with_mock_cleaning'
+      && Array.isArray(cap.commands) && cap.commands.length===5
+      && ['start','pause','resume','reset','stop'].every(command=>cap.commands.includes(command));
+    if (!cap || cap.schema_version !== 1 || (!simulation&&!robot) || cap.control_enabled !== true
+        || !c || c.schema_version !== 1
         || !Number.isSafeInteger(c.control_epoch) || c.control_epoch < 0
         || !['none','automatic','manual','blocked'].includes(c.owner)
         || !['READY','NAV_STARTING','HALTING','MANUAL_READY','PAUSED','FAULT'].includes(c.phase)
@@ -58,18 +67,21 @@ const loopback = baseUrl => {try {return ['127.0.0.1','localhost','[::1]'].inclu
 export function controlPolicy(data, sessionId, locallyAllowed = true) {
   const c=data?.control, s=data?.mission;
   const available=locallyAllowed && data?.connection==='ONLINE' && data?.read_only===false
-    && data.capabilities?.environment==='local_simulation' && data.capabilities.control_enabled===true && s?.mode==='mock';
+    && data.capabilities?.control_enabled===true
+    && ((data.capabilities.environment==='local_simulation'&&s?.mode==='mock')
+      || (data.capabilities.environment==='robot_navigation'&&s?.mode==='nav2_with_mock_cleaning'));
+  const simulation=data?.capabilities?.environment==='local_simulation';
   const own=c?.controller_id===sessionId, free=c?.controller_id===null, ready=available && (own||free);
   const busy=c?.command_result?.status==='pending', halting=c?.phase==='HALTING', manual=ready&&own&&c.owner==='manual';
   const stopped=s?.stationary_confirmed===true && !s.owned_goal_id && s.goal_response_pending===false && s.halt_state!=='UNCONFIRMED';
   return {available,own,manual,
     start:ready&&!busy&&!halting&&stopped&&c.localization_valid&&s.state==='IDLE'&&c.owner!=='manual',
     pause:ready&&!busy&&!halting&&s.state!=='IDLE'&&s.state!=='FAULT'&&c.owner!=='manual',
-    resume:ready&&!busy&&!halting&&stopped&&s.state==='PAUSED'&&!!s.saved_goal&&c.owner!=='manual'&&c.phase!=='FAULT',
+    resume:ready&&!busy&&!halting&&stopped&&c.localization_valid&&s.state==='PAUSED'&&!!s.saved_goal&&c.owner!=='manual'&&c.phase!=='FAULT',
     reset:ready&&!busy&&!halting&&stopped&&['IDLE','PAUSED','FAULT'].includes(s.state)&&c.owner!=='manual',
-    requestManual:ready&&!busy&&!halting&&c.owner!=='manual'&&c.phase!=='FAULT',
-    releaseManual:manual&&!busy,
-    manualIntent:manual&&!busy&&c.phase==='MANUAL_READY',
+    requestManual:simulation&&ready&&!busy&&!halting&&c.owner!=='manual'&&c.phase!=='FAULT',
+    releaseManual:simulation&&manual&&!busy,
+    manualIntent:simulation&&manual&&!busy&&c.phase==='MANUAL_READY',
     stop:available};
 }
 
@@ -95,8 +107,9 @@ export function createNavigationApi({ baseUrl = '', sessionId = crypto.randomUUI
       return data;
     } finally { clearTimeout(timeout); if (controller === ownController) controller = null; }
   }
-  const localControl = () => loopback(baseUrl) && latest?.read_only===false
-    && latest.capabilities?.environment==='local_simulation' && latest.capabilities.control_enabled===true;
+  const localControl = () => latest?.read_only===false && latest.capabilities?.control_enabled===true
+    && ((loopback(baseUrl)&&latest.capabilities.environment==='local_simulation')
+      || latest.capabilities.environment==='robot_navigation');
   const fresh = () => latest?.connection==='ONLINE' && performance.now()-receivedAt <
     (latest.stale_after_seconds-latest.age_seconds)*1000;
   async function post(path, body, keepalive=false) {
@@ -120,7 +133,7 @@ export function createNavigationApi({ baseUrl = '', sessionId = crypto.randomUUI
     if(!localControl())throw new NavigationNotConnectedError();
     if(command!=='stop' && !fresh())throw new Error('任务状态过期，不能发送新操作');
     const actionNames={request_manual:'requestManual',release_manual:'releaseManual',manual_intent:'manualIntent'};
-    const policy=controlPolicy(latest,sessionId,loopback(baseUrl));
+    const policy=controlPolicy(latest,sessionId,localControl());
     if(command!=='stop'&&!policy[actionNames[command]||command])throw new Error('当前控制权或停车条件不允许该操作');
     const body={...payload,schema_version:1,request_id:payload.request_id||crypto.randomUUID(),command,
       session_id:sessionId,bridge_instance_id:latest.bridge_instance_id,control_epoch:latest.control.control_epoch};
@@ -178,7 +191,15 @@ export function createNavigationApi({ baseUrl = '', sessionId = crypto.randomUUI
       }
     },
     getStatus,
-    getMap: unavailable,
+    getMap: async () => {
+      if(!baseUrl||latest?.capabilities?.environment!=='robot_navigation')return unavailable();
+      const abort=new AbortController(), timeout=setTimeout(()=>abort.abort(),1800);
+      try {
+        const response=await fetch(baseUrl.replace(/\/$/,'')+'/api/v1/map',{cache:'no-store',signal:abort.signal});
+        if(!response.ok)throw new Error('地图服务不可用');
+        return response.json();
+      } finally {clearTimeout(timeout);}
+    },
     start: payload=>send('start',payload),
     pause: payload=>send('pause',payload),
     resume: payload=>send('resume',payload),

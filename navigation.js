@@ -2,6 +2,7 @@ import {stateLabels, connectionLabels} from './task-labels.js';
 import {loadConfig} from './connection-config.js';
 import {installSettings} from './connection-settings.js';
 import { createNavigationApi, controlPolicy } from './navigation-api.js';
+import {createMapView} from './navigation-map.js';
 
 const $ = (id) => document.getElementById(id);
 const KEYS = { goal: 'nail.navigation.goalDraft.v1' };
@@ -31,6 +32,12 @@ function parseGoal(value) {
   return goal;
 }
 let lastFeedback = '', currentStatus=null, pendingUi=null, manualHold=null, manualTimer=null;
+let loadedMapId=null,mapLoading=false;
+const mapView=createMapView(document.querySelector('.map-stage'),point=>{
+  $('goalX').value=point.x.toFixed(3);$('goalY').value=point.y.toFixed(3);
+  if(!$('goalYaw').value.trim())$('goalYaw').value=0;
+  $('draftStatus').textContent='已选地图目标，尚未发送';updateControls();
+});
 const operationNames={start:'开始导航',pause:'暂停任务',resume:'恢复导航',reset:'重置任务',
   request_manual:'申请手动接管',release_manual:'结束手动接管',stop:'停止并暂停'};
 const phaseNames={READY:'就绪',NAV_STARTING:'等待导航接受',HALTING:'取消导航 / 等待停车',
@@ -44,10 +51,18 @@ function updateControls(){
   }
   for(const button of document.querySelectorAll('[data-direction]'))button.disabled=!p.manualIntent||!!pendingUi;
   if(!p.manualIntent&&manualHold)stopManual(false);
+  const online=currentStatus?.connection==='ONLINE';
+  mapView.update(online?currentStatus?.navigation?.robot_pose:null,
+    validInputs()?{x:$('goalX').valueAsNumber,y:$('goalY').valueAsNumber,yaw_deg:$('goalYaw').valueAsNumber}:null,
+    online&&currentStatus?.control?.localization_valid===true);
+  const pick=document.querySelector('.map-pick');
+  pick.disabled=!online||!loadedMapId||currentStatus?.control?.localization_valid!==true;
+  pick.querySelector('span').textContent=loadedMapId?'点击地图空白区':'等待地图';
 }
 function showResult(result){
   const name=operationNames[result.command]||'操作';
-  const texts={pending:'已接收，等待状态确认',succeeded:result.command==='start'||result.command==='resume'?'导航已接受（模拟）':'已完成（模拟）',
+  const suffix=currentStatus?.capabilities?.environment==='local_simulation'||currentStatus?.capabilities?.preview?'（模拟）':'';
+  const texts={pending:'已接收，等待状态确认',succeeded:result.command==='start'||result.command==='resume'?'导航已接受'+suffix:'已完成'+suffix,
     failed:'执行失败',rejected:'已拒绝'};
   $('commandFeedback').textContent=`${name}：${texts[result.status]}${result.reason?' · '+result.reason:''}`;
   if(result.status!=='pending'){
@@ -60,23 +75,48 @@ function renderStatus(data) {
     $('commandFeedback').textContent='服务已重启，上一操作结果未确认，请重新检查状态。';pendingUi=null;
   }
   currentStatus=data;
+  document.body.classList.toggle('navigation-preview',data.capabilities?.preview===true);
   const online = data.connection === 'ONLINE', s = data.mission;
   $('connectionText').textContent = connectionLabels[data.connection] || '状态未知';
   document.querySelector('.connection i').style.background = online ? '#6cbd9c' : '#d5ad62';
   $('taskBadge').textContent = online ? '实时' : (data.connection === 'STALE' ? '已过期' : '未确认');
   $('modeNotice').textContent = s ? (s.mode === 'mock' ? '模拟任务 · 只读' : '真实导航适配 · 清理模拟') : '只读状态';
   const c=data.control;
-  if(data.read_only===false)$('modeNotice').textContent='本地模拟 · 所有移动与停车均模拟';
+  if(online&&data.navigation?.map_id&&loadedMapId!==data.navigation.map_id&&!mapLoading){
+    mapLoading=true;const selectedApi=api,expected=data.navigation.map_id;
+    void api.getMap().then(map=>{
+      if(api!==selectedApi||currentStatus?.connection!=='ONLINE'||currentStatus?.navigation?.map_id!==expected)return;
+      if(map?.map_id!==expected)throw new Error('地图已切换，正在等待最新地图');
+      mapView.setMap(map);loadedMapId=map.map_id;updateControls();
+    }).catch(error=>log(error.message,true)).finally(()=>{mapLoading=false;});
+  }
+  const details=document.querySelectorAll('.map-details strong');
+  if(data.capabilities?.environment==='robot_navigation'||loadedMapId){
+    const pose=online?data.navigation?.robot_pose:null;
+    details[0].textContent=pose?`(${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}) 米`:'未确认';
+    details[1].textContent=pose?`${(pose.yaw*180/Math.PI).toFixed(1)}°`:'—';
+    details[2].textContent=online&&c?.localization_valid?'可用':'未确认';
+    details[3].textContent=online?new Date().toLocaleTimeString('zh-CN',{hour12:false}):'已过期';
+    document.querySelector('.map-footer>span').textContent='坐标系：map';
+    document.querySelector('.map-card .card-heading p').textContent=online&&c?.localization_valid?'地图已连接 / 定位可用':'定位未确认';
+  }
+  $('startButton').querySelector('span').textContent=data.capabilities?.environment==='robot_navigation'?'真实导航':'等待服务就绪';
+  if(data.capabilities?.preview)$('startButton').querySelector('span').textContent='模拟反馈';
+  if(data.read_only===false)$('modeNotice').textContent=data.capabilities?.preview?'接口预览 · 地图与导航反馈均模拟':data.capabilities?.environment==='robot_navigation'
+    ?'真实单点导航 · 拾取未启用':'本地模拟 · 所有移动与停车均模拟';
   $('controlOwner').textContent=online&&c?ownerNames[c.owner]:'未确认';
   $('controlPhase').textContent=online&&c?phaseNames[c.phase]:'—';
   $('controllerPage').textContent=online&&c?(c.controller_id===null?'未占用':c.controller_id===api.sessionId?'本页':'其他页面'):'—';
   $('takeoverStatus').textContent=online&&c?phaseNames[c.phase]:'实车接口只读，控制权未确认';
   const directions={stop:'停止',forward:'前进',backward:'后退',left:'左转',right:'右转'};
-  $('manualIntentState').textContent='模拟意图：'+(online&&c?directions[c.manual_direction]:'未确认');
+  $('manualIntentState').textContent=data.capabilities?.environment==='robot_navigation'
+    ?'本轮只开放导航，手动接管尚未启用':'模拟意图：'+(online&&c?directions[c.manual_direction]:'未确认');
   if(pendingUi&&c?.command_result?.request_id===pendingUi.request_id&&c.command_result.bridge_instance_id===pendingUi.bridge){
     showResult(c.command_result);
   }
   $('missionMode').textContent = s ? (s.mode === 'mock' ? '模拟' : '真实导航 / 模拟清理') : '—';
+  if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent='真实单点导航';
+  if(data.capabilities?.preview)$('missionMode').textContent='导航接口预览（模拟）';
   $('missionState').textContent = s ? (stateLabels[s.state] + (online ? '' : '（最后状态）')) : '—';
   $('missionGoal').textContent = s?.saved_goal ? `(${s.saved_goal.x}, ${s.saved_goal.y}) 米 · ${s.saved_goal.yaw_deg}°` : '—';
   $('stationaryState').textContent = !online ? '未确认（数据不可用）' :
@@ -86,6 +126,7 @@ function renderStatus(data) {
   const haltLabels = {NONE:'未请求停车',CANCELING:'取消中',VERIFYING_STOP:'核实停车中',CONFIRMED:'已确认',UNCONFIRMED:'未确认'};
   $('haltState').textContent = online && s?.halt_state ? (haltLabels[s.halt_state] || s.halt_state) : '—';
   $('cleaningMode').textContent = s ? '模拟' : '—';
+  if(data.capabilities?.environment==='robot_navigation')$('cleaningMode').textContent='未启用';
   $('attemptState').textContent = s ? `${s.attempt} / ${s.max_attempts}` : '—';
   $('missionAlarm').textContent = s ? (s.alarm || '无') : '—';
   $('missionAlarm').style.color = s?.alarm ? '#e98a91' : '';
@@ -101,11 +142,20 @@ function renderStatus(data) {
   updateControls();
 }
 let api = createNavigationApi({ baseUrl: loadConfig().navigationUrl });
+document.querySelector('.map-pick').addEventListener('click',()=>{
+  document.querySelector('.navigation-map').scrollIntoView({block:'center'});
+  $('draftStatus').textContent='点击地图空白区填写目标，再确认坐标和朝向';
+});
 let unsubscribe = api.subscribeStatus(renderStatus);
 function resetConnection() {
   stopManual(false);
   $('commandFeedback').textContent=pendingUi?'连接已断开，上一操作结果未确认。':'尚未发送操作';
   pendingUi=null;
+  loadedMapId=null;mapView.clear();
+  const details=document.querySelectorAll('.map-details strong');
+  ['—','—','未确认','—'].forEach((text,i)=>{details[i].textContent=text;});
+  document.querySelector('.map-card .card-heading p').textContent='地图 — / 定位未确认';
+  document.querySelector('.map-footer>span').textContent='坐标系：待确认';
   $('connectButton').disabled = false; $('disconnectButton').disabled = true;
   renderStatus({connection:'DISCONNECTED',mission:null});
 }
@@ -207,4 +257,4 @@ installSettings($('settingsButton'), config => {
   log('共用连接设置已更新，点击连接任务服务重新获取状态。');
 });
 $('clearLog').addEventListener('click', () => { $('operationLog').replaceChildren(); log('本地操作记录已清空。'); });
-log('导航页面已加载。实车接口只读，控制操作仅限本地模拟服务。');
+log('导航页面已加载。连接任务服务后，根据导航就绪与停车状态开放操作。');
