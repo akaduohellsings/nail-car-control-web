@@ -1,6 +1,20 @@
 # Web 单点导航（2026-10-04）
 
-电脑网页与车端接口已部署，先通过 Type-C 实际读取小车状态，随后切换到电脑热点；保留现有布局。车端只读服务在线，尚未启动底盘或实际 Nav2，地图、定位与行驶尚未验收。Type-C 继续保留。
+电脑网页与车端接口已部署，先通过 Type-C 实际读取小车状态，随后切换到电脑热点；保留现有布局。真实地图、车位与静止停车反馈已接通，行驶与实车暂停/恢复仍待验收。Type-C 继续保留。
+
+## 最新静止联调
+
+用户确认小车仍在保存地图的建图起点且车头方向一致。已加载真实地图（69×135、0.05 米/格），网页显示小车 `(0.00, 0.00)`、当前朝向、定位可用、导航服务已就绪、停车已确认。截图 `navigation-static-map-pose.png` 为检查服务运行时的真实画面。
+
+底盘速度输入重映射到无发布者的隔离话题，Nav2 速度输出另行隔离；没有执行 NavigateToPose、没有非零速度指令，最大实测线速度为 0。电压约 11.032–11.088 V。AMCL、map_server、planner_server、controller_server、bt_navigator 均 active；雷达与地图端点匹配比例约 89.3%（15 cm 内）。这只支持静止匹配和新鲜 TF，不能证明 AMCL 已收敛或行驶精度。
+
+仅通过 ComputePathToPose 计算前方约 0.4 米路径，没有执行。网页保存 X=0.4、Y=0、朝向=0 的草稿，未发送。开始按钮始终禁用。
+
+启动期间出现生命周期状态冲突及服务回执丢失；检查入口改为依次切换并确认实际状态，诊断运行限定 UDP 通信。关闭前先 deactivate/cleanup，最终导航进程正常退出且无遗留硬件服务；完整失败与通过报告均保存在小车项目。最终仍记录一次配置回执缺失，但随后实际 inactive/active 状态检查通过，未重复发送配置请求。
+
+检查完成后已关闭底盘、雷达与 Nav2，保留只读地图和 Web 桥。因此当前车位与定位恢复“未确认”，需重启实际传感器/定位后才可更新，网页不会继续显示检查时的位置。雷达停止帧已按厂家协议写入，未测量物理电机停止。
+
+车端检查入口 `tools/check_web_navigation_static.py --host 当前IP --map-yaml 地图路径 --origin-confirmed` 只用于确认起点后的静止联调；结束后自动关闭自身启动的导航进程。地图服务入口 `tools/start_web_map.py --host 当前IP --map-yaml 地图路径` 只启动地图，不启动硬件。报告 `test_results/web_navigation_static_latest.json`；下一步接受限单点导航执行与实车暂停/停车，不直接启用默认高速与恢复动作。
 
 ## 当前无线连接
 
@@ -52,4 +66,4 @@ ros2 run nail_mission_ros2 navigation_control_bridge --config /home/wheeltec/nai
 
 本次增加连接配置校验后，车端 9 项接口测试与 3 项 HTTP/ROS Action 隔离测试通过。后者使用假的 Nav2 服务验证实际 ROS 通信，未启动硬件、未发送实车目标。车端单包编译通过。
 
-浏览器连接实际 Type-C 服务，显示任务状态在线、真实单点导航适配、导航服务未就绪、定位未确认，开始按钮禁用。截图 `navigation-typec-readonly.png` 是真实状态读取；`navigation-typec-preview.png` 仍只作为模拟页面预览证据。实际地图/TF、真实停车时序与实际运动仍待验收。
+前一阶段浏览器连接实际 Type-C 服务，显示任务在线、导航未就绪、定位未确认，开始禁用。截图 `navigation-typec-readonly.png` 是该阶段真实状态读取；`navigation-typec-preview.png` 仍只作为模拟页面预览证据。最新静止联调已验证实际地图/TF 与停车反馈，执行导航后的取消/停车时序和实际运动仍待验收。
