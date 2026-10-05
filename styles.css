@@ -296,6 +296,41 @@ body {
   background: #1f6feb;
 }
 
+/* ========== 通用按钮（与导航页/连接设置弹窗的深色按钮统一） ========== */
+.form-params button,
+.card-title button {
+  font: inherit;
+  background: #1b2738;
+  color: #e6edf3;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.form-params button:hover:not(:disabled),
+.card-title button:hover:not(:disabled) {
+  background: #24354d;
+  border-color: var(--accent);
+}
+.form-params button:disabled,
+.card-title button:disabled {
+  cursor: not-allowed;
+  opacity: .44;
+}
+.card-title button,
+.card-title select {
+  font-size: 11px;
+  padding: 4px 10px;
+  vertical-align: middle;
+}
+.card-title select {
+  background: #1b2738;
+  color: #e6edf3;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
 /* ========== Messages Card ========== */
 .messages-card {
   flex: 1;
