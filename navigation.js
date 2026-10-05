@@ -129,7 +129,7 @@ function renderStatus(data) {
   $('startButton').querySelector('span').textContent=data.capabilities?.environment==='robot_navigation'?'真实导航':'等待服务就绪';
   if(data.capabilities?.preview)$('startButton').querySelector('span').textContent='模拟反馈';
   if(data.read_only===false)$('modeNotice').textContent=data.capabilities?.preview?'接口预览 · 地图与导航反馈均模拟':data.capabilities?.environment==='robot_navigation'
-    ?'真实单点导航 · 拾取未启用':'本地模拟 · 所有移动与停车均模拟';
+    ?(data.capabilities?.continuous_testing?'真实单点导航 · 连续测试：到达后可直接选下一点，失败后停止并重置':'真实单点导航 · 拾取未启用'):'本地模拟 · 所有移动与停车均模拟';
   $('controlOwner').textContent=online&&c?ownerNames[c.owner]:'未确认';
   $('controlPhase').textContent=online&&c?phaseNames[c.phase]:'—';
   $('controllerPage').textContent=online&&c?(c.controller_id===null?'未占用':c.controller_id===api.sessionId?'本页':'其他页面'):'—';
