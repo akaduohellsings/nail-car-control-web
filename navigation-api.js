@@ -81,8 +81,9 @@ export function controlPolicy(data, sessionId, locallyAllowed = true) {
   const own=c?.controller_id===sessionId, free=c?.controller_id===null, ready=available && (own||free);
   const busy=c?.command_result?.status==='pending', halting=c?.phase==='HALTING', manual=ready&&own&&c.owner==='manual';
   const stopped=s?.stationary_confirmed===true && !s.owned_goal_id && s.goal_response_pending===false && s.halt_state!=='UNCONFIRMED';
+  const retry= data?.capabilities?.retry_after_navigation_abort===true && s?.state==='FAULT' && s.alarm==='NAVIGATION_ABORTED';
   return {available,own,manual,
-    start:ready&&!busy&&!halting&&stopped&&c.localization_valid&&s.state==='IDLE'&&c.owner!=='manual',
+    start:ready&&!busy&&!halting&&stopped&&c.localization_valid&&(s.state==='IDLE'||retry)&&c.owner!=='manual',
     pause:ready&&!busy&&!halting&&s.state!=='IDLE'&&s.state!=='FAULT'&&c.owner!=='manual',
     resume:ready&&!busy&&!halting&&stopped&&c.localization_valid&&s.state==='PAUSED'&&!!s.saved_goal&&c.owner!=='manual'&&c.phase!=='FAULT',
     reset:ready&&!busy&&!halting&&stopped&&['IDLE','PAUSED','FAULT'].includes(s.state)&&c.owner!=='manual',

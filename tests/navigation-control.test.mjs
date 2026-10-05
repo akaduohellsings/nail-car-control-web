@@ -26,6 +26,18 @@ test('HALTING, stale, unlocalized and other-page status cannot grant control',()
  assert.equal(controlPolicy(d,'B').manualIntent,true);assert.equal(controlPolicy(d,'B').resume,false);
  d.connection='STALE';assert.equal(controlPolicy(d,'B').manualIntent,false);
 });
+test('ordinary abort permits a new target only with capability and confirmed stop',()=>{
+ const d=status();d.capabilities.environment='robot_navigation';d.capabilities.retry_after_navigation_abort=true;
+ d.mission.mode='nav2_with_mock_cleaning';d.mission.state='FAULT';d.mission.alarm='NAVIGATION_ABORTED';
+ d.mission.halt_state='CONFIRMED';d.control.phase='FAULT';d.control.owner='blocked';
+ assert.equal(controlPolicy(d,'A').start,true);
+ assert.equal(controlPolicy(d,'A').stop,true);
+ for(const mutate of [x=>x.capabilities.retry_after_navigation_abort=false,x=>x.mission.stationary_confirmed=false,
+   x=>x.mission.owned_goal_id='old-goal',x=>x.mission.alarm='STOP_UNCONFIRMED',x=>x.control.controller_id='B',
+   x=>x.control.localization_valid=false]){
+  const blocked=structuredClone(d);mutate(blocked);assert.equal(controlPolicy(blocked,'A').start,false);
+ }
+});
 test('non-loopback address stays read-only even if server advertises local control',async()=>{
  const previous=globalThis.fetch;let calls=0;
  globalThis.fetch=async()=>{calls++;return {ok:true,json:async()=>status()};};
