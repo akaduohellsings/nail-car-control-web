@@ -35,6 +35,13 @@ export function validateEnvelope(data) {
     if(!n || typeof n.map_id!=='string' || (n.robot_pose!==null
       && !['x','y','yaw'].every(key=>Number.isFinite(n.robot_pose?.[key]))))invalid();
   }
+  const positive = v => typeof v==='number' && Number.isFinite(v) && v>0;
+  const speeds = v => v && positive(v.linear_m_s) && positive(v.angular_rad_s);
+  const limits=data.capabilities?.speed_limits;
+  if(limits!==undefined && (!positive(limits?.linear_max_m_s) || !positive(limits?.angular_max_rad_s)
+      || !speeds(limits.defaults) || limits.defaults.linear_m_s>limits.linear_max_m_s
+      || limits.defaults.angular_rad_s>limits.angular_max_rad_s)) invalid();
+  if(data.control?.speed_limits!=null && !speeds(data.control.speed_limits)) invalid();
   if (data.read_only === false) {
     const c = data.control, cap = data.capabilities;
     const simulation=cap?.environment==='local_simulation' && s?.mode==='mock';

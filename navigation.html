@@ -33,6 +33,9 @@
             <button class="map-pick button subtle" type="button" disabled>⌖ 在地图上选择目标 <span>待接入</span></button>
             <div class="coordinate-fields"><label>X 坐标 <span>米</span><input id="goalX" type="number" step="any" placeholder="输入 X" required /></label><label>Y 坐标 <span>米</span><input id="goalY" type="number" step="any" placeholder="输入 Y" required /></label></div>
             <label class="yaw-field">目标朝向 <span>度</span><input id="goalYaw" type="number" step="any" placeholder="输入朝向角度" required /></label>
+            <div class="coordinate-fields speed-fields"><label>最大移动速度 <span>米/秒</span><input id="maxLinearSpeed" type="number" min="0.001" max="0.06" step="any" value="0.06" required /></label><label>最大转向速度 <span>度/秒</span><input id="maxAngularSpeed" type="number" min="0.01" max="13.75" step="any" value="13.75" required /></label></div>
+            <p class="form-hint" id="speedHint" role="status">速度随下一次开始导航生效；暂停、恢复沿用该次设置。</p>
+            <p class="form-hint" id="appliedSpeed" role="status">本次生效速度：尚未下发</p>
             <p class="form-hint">坐标需要对应已确认的地图。保存草稿不会发送导航目标。</p>
             <div class="draft-actions"><button class="button subtle" type="submit">保存目标草稿</button><button class="text-button" id="clearDraft" type="button">清空</button></div>
             <p id="draftStatus" class="draft-status" role="status">尚未保存目标草稿</p>

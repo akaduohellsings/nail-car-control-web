@@ -7,6 +7,16 @@ const envelope = () => ({schema_version:1,read_only:true,bridge_instance_id:'bri
   alarm:null,pending:null,cleaning_mode:'mock',stationary_confirmed:null,halt_state:null,owned_goal_id:null,
   goal_response_pending:null,action_server_ready:null}});
 
+test('speed policies and applied limits reject malformed numeric values',()=>{
+  const d=envelope();d.capabilities={speed_limits:{linear_max_m_s:.06,angular_max_rad_s:.24,
+    defaults:{linear_m_s:.06,angular_rad_s:.24}}};
+  validateEnvelope(d);
+  d.capabilities.speed_limits.defaults.angular_rad_s=.3;
+  assert.throws(()=>validateEnvelope(d));
+  delete d.capabilities;d.control={speed_limits:{linear_m_s:'0.06',angular_rad_s:.24}};
+  assert.throws(()=>validateEnvelope(d));
+});
+
 test('same schema accepts mock/real and rejects invalid freshness/types', () => {
   const mock=envelope(); assert.equal(validateEnvelope(mock).mission.observed_at_ros_ns,'1790856417364115436');
   const real=envelope(); real.mission.mode='nav2_with_mock_cleaning'; real.mission.stationary_confirmed=false;

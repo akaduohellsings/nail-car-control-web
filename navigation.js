@@ -3,9 +3,11 @@ import {loadConfig} from './connection-config.js';
 import {installSettings} from './connection-settings.js';
 import { createNavigationApi, controlPolicy } from './navigation-api.js';
 import {createMapView} from './navigation-map.js';
+import {parseSpeedInputs,speedText} from './navigation-speed.js';
 
 const $ = (id) => document.getElementById(id);
-const KEYS = { goal: 'nail.navigation.goalDraft.v1' };
+const KEYS = { goal: 'nail.navigation.goalDraft.v1',speed:'nail.navigation.speedDraft.v1' };
+let speedEdited=false,speedPolicyKey='';
 const log = (message, error = false) => {
   const item = document.createElement('li');
   if (error) item.className = 'error';
@@ -44,10 +46,30 @@ const phaseNames={READY:'就绪',NAV_STARTING:'等待导航接受',HALTING:'取�
   MANUAL_READY:'手动接管已确认',PAUSED:'已停车，等待明确操作',FAULT:'停止未确认或任务故障'};
 const ownerNames={none:'未分配',automatic:'自动任务',manual:'手动控制',blocked:'暂不允许控制'};
 function validInputs(){return ['goalX','goalY','goalYaw'].every(id=>$(id).value.trim()&&Number.isFinite($(id).valueAsNumber));}
+function speedInputs(){return parseSpeedInputs($('maxLinearSpeed').valueAsNumber,$('maxAngularSpeed').valueAsNumber,currentStatus?.capabilities?.speed_limits);}
+function validSpeeds(){try{speedInputs();return true;}catch{return false;}}
+function renderSpeeds(){
+  const policy=currentStatus?.capabilities?.speed_limits,key=JSON.stringify(policy??null);
+  if(policy&&key!==speedPolicyKey&&!speedEdited){
+    $('maxLinearSpeed').value=policy.defaults.linear_m_s;
+    $('maxAngularSpeed').value=Math.floor(policy.defaults.angular_rad_s*180/Math.PI*100)/100;
+  }
+  speedPolicyKey=key;
+  $('maxLinearSpeed').max=policy?.linear_max_m_s??.06;
+  $('maxAngularSpeed').max=Math.floor((policy?.angular_max_rad_s??.24)*180/Math.PI*100)/100;
+  const running=currentStatus?.connection==='ONLINE'&&currentStatus?.mission&&!['IDLE','PAUSED','FAULT'].includes(currentStatus.mission.state);
+  $('maxLinearSpeed').disabled=running;$('maxAngularSpeed').disabled=running;
+  let hint=policy?'速度随下一次开始导航生效；暂停、恢复沿用该次设置。':'可保存速度草稿，连接支持速度设置的导航服务后生效。';
+  try{speedInputs();}catch(error){hint=error.message;}
+  $('speedHint').textContent=hint;
+  const applied=currentStatus?.connection==='ONLINE'?currentStatus?.control?.speed_limits:null;
+  $('appliedSpeed').textContent=applied?`本次生效上限：${speedText(applied)}`:'本次生效速度：尚未下发';
+}
 function updateControls(){
+  renderSpeeds();
   const p=controlPolicy(currentStatus,api.sessionId,api.controlAvailable);
   for(const action of ['start','pause','resume','reset','requestManual','releaseManual','stop']){
-    $(action+'Button').disabled=!p[action] || (action!=='stop'&&!!pendingUi) || (action==='start'&&!validInputs());
+    $(action+'Button').disabled=!p[action] || (action!=='stop'&&!!pendingUi) || (action==='start'&&(!validInputs()||!validSpeeds()||!currentStatus?.capabilities?.speed_limits));
   }
   for(const button of document.querySelectorAll('[data-direction]'))button.disabled=!p.manualIntent||!!pendingUi;
   if(!p.manualIntent&&manualHold)stopManual(false);
@@ -190,14 +212,16 @@ async function submitOperation(method, payload={}){
   }
 }
 $('startButton').addEventListener('click',()=>{
-  if(!validInputs())return;
+  if(!validInputs()||!validSpeeds())return;
   void submitOperation('start',{map_id:currentStatus?.control?.map_id,
+    speed_limits:speedInputs(),
     goal:parseGoal({x:$('goalX').valueAsNumber,y:$('goalY').valueAsNumber,yaw_deg:$('goalYaw').valueAsNumber})});
 });
 for(const name of ['pause','resume','reset','requestManual','releaseManual','stop']){
   $(name+'Button').addEventListener('click',()=>void submitOperation(name));
 }
 for(const id of ['goalX','goalY','goalYaw'])$(id).addEventListener('input',updateControls);
+for(const id of ['maxLinearSpeed','maxAngularSpeed'])$(id).addEventListener('input',()=>{speedEdited=true;updateControls();});
 function stopManual(sendStop=true){
   const wasHeld=manualHold;manualHold=null;clearTimeout(manualTimer);
   if(wasHeld&&sendStop)void api.manualIntent({direction:'stop'}).catch(()=>api.stop().catch(()=>{}));
@@ -238,6 +262,11 @@ try {
     $('draftStatus').textContent = '已恢复本地目标草稿，尚未发送';
   }
 } catch { log('已有目标草稿无法读取，请重新填写。', true); }
+try{
+  const saved=read(KEYS.speed);
+  if(saved){const v=JSON.parse(saved);parseSpeedInputs(v.linear_m_s,v.angular_deg_s);
+    $('maxLinearSpeed').value=v.linear_m_s;$('maxAngularSpeed').value=v.angular_deg_s;speedEdited=true;}
+}catch{log('已有速度草稿无法读取，请重新填写。',true);}
 $('goalForm').addEventListener('submit', (event) => {
   event.preventDefault();
   const fields = [$('goalX'), $('goalY'), $('goalYaw')];
@@ -245,14 +274,18 @@ $('goalForm').addEventListener('submit', (event) => {
     log('请填写有效的 X、Y 和目标朝向。', true); return;
   }
   const goal = parseGoal({ x: fields[0].valueAsNumber, y: fields[1].valueAsNumber, yaw_deg: fields[2].valueAsNumber });
+  try{speedInputs();}catch(error){log(error.message,true);return;}
   if (!save(KEYS.goal, JSON.stringify(goal))) return;
-  $('draftStatus').textContent = `草稿已保存：(${goal.x}, ${goal.y}) · ${goal.yaw_deg}°`;
+  if(!save(KEYS.speed,JSON.stringify({linear_m_s:$('maxLinearSpeed').valueAsNumber,angular_deg_s:$('maxAngularSpeed').valueAsNumber})))return;
+  speedEdited=true;
+  $('draftStatus').textContent = `草稿已保存：(${goal.x}, ${goal.y}) · ${goal.yaw_deg}°；速度 ${speedText(speedInputs())}`;
   log(`保存目标草稿：X ${goal.x} 米，Y ${goal.y} 米，朝向 ${goal.yaw_deg}°。未发送。`);
 });
 $('clearDraft').addEventListener('click', () => {
-  try { localStorage.removeItem(KEYS.goal); }
+  try { localStorage.removeItem(KEYS.goal); localStorage.removeItem(KEYS.speed); }
   catch { log('无法清除已保存的草稿，请检查浏览器存储权限。', true); return; }
   $('goalForm').reset(); $('draftStatus').textContent = '尚未保存目标草稿'; log('已清空本地目标草稿。');
+  speedEdited=false;speedPolicyKey='';updateControls();
 });
 installSettings($('settingsButton'), config => {
   unsubscribe(); api.disconnect();
