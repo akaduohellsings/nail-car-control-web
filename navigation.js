@@ -37,7 +37,7 @@ let lastFeedback = '', currentStatus=null, pendingUi=null, manualHold=null, manu
 let loadedMapId=null,mapLoading=false;
 const mapView=createMapView(document.querySelector('.map-stage'),point=>{
   $('goalX').value=point.x.toFixed(3);$('goalY').value=point.y.toFixed(3);
-  if(!$('goalYaw').value.trim())$('goalYaw').value=0;
+  if(!$('goalYaw').value.trim())$('goalYaw').value=currentStatus?.navigation?.robot_pose?Math.round(currentStatus.navigation.robot_pose.yaw*180/Math.PI):0;
   $('draftStatus').textContent='已选地图目标，尚未发送';updateControls();
 });
 const operationNames={start:'开始导航',pause:'暂停任务',resume:'恢复导航',reset:'重置任务',
@@ -143,7 +143,8 @@ function renderStatus(data) {
   $('missionMode').textContent = s ? (s.mode === 'mock' ? '模拟' : '真实导航 / 模拟清理') : '—';
   if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent='真实单点导航';
   if(data.capabilities?.preview)$('missionMode').textContent='导航接口预览（模拟）';
-  $('missionState').textContent = s ? (stateLabels[s.state] + (online ? '' : '（最后状态）')) : '—';
+  const arrived=s?.state==='IDLE'&&s.saved_goal&&s.halt_state==='NONE'&&s.owned_goal_id===null&&s.goal_response_pending===false&&s.stationary_confirmed===true;
+  $('missionState').textContent = s ? ((arrived?'已到达':stateLabels[s.state]) + (online ? '' : '（最后状态）')) : '—';
   $('missionGoal').textContent = s?.saved_goal ? `(${s.saved_goal.x}, ${s.saved_goal.y}) 米 · ${s.saved_goal.yaw_deg}°` : '—';
   $('stationaryState').textContent = !online ? '未确认（数据不可用）' :
     (s.stationary_confirmed === null ? '未提供（模拟）' : s.stationary_confirmed ? '已确认' : '未确认');
@@ -159,9 +160,9 @@ function renderStatus(data) {
   $('statusSequence').textContent = s ? String(s.sequence) : '—';
   try { $('statusTime').textContent = s ? new Date(Number(BigInt(s.observed_at_ros_ns) / 1000000n)).toLocaleTimeString('zh-CN') + (online ? '' : '（过期）') : '—'; }
   catch { $('statusTime').textContent = '时间格式异常'; }
-  const feedback = [data.connection,s?.source_instance_id,s?.state,s?.alarm].join('|');
+  const feedback = [data.connection,s?.source_instance_id,s?.state,s?.alarm,!!arrived].join('|');
   if (feedback !== lastFeedback) {
-    log(`${connectionLabels[data.connection] || '状态未知'}${s ? '：'+(s.mode==='mock'?'模拟':'真实适配')+' · '+stateLabels[s.state] : ''}${data.error ? '。'+data.error : ''}`,
+    log(`${connectionLabels[data.connection] || '状态未知'}${s ? '：'+(s.mode==='mock'?'模拟':'真实适配')+' · '+(arrived?'已到达':stateLabels[s.state]) : ''}${data.error ? '。'+data.error : ''}`,
       ['UNREACHABLE','INVALID','CONFLICT'].includes(data.connection));
     lastFeedback = feedback;
   }
