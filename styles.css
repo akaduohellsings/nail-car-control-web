@@ -15,7 +15,6 @@
   --red:         #f85149;
   --radius:      10px;
   --shadow:      0 2px 12px rgba(0,0,0,0.35);
-  --header-height: 52px;
   --gap: 14px;
   --padding: 14px;
 }
@@ -40,39 +39,7 @@ body {
 }
 
 /* ========== Header ========== */
-.header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 8px 20px;
-  height: var(--header-height);
-  flex-shrink: 0;
-  background: linear-gradient(90deg, #0d1117 0%, #161b22 100%);
-  border-bottom: 1px solid var(--border);
-}
-.header-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.logo-icon {
-  font-size: 22px;
-  filter: drop-shadow(0 0 6px var(--accent));
-}
-.logo-text {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  background: linear-gradient(135deg, var(--accent), #79c0ff);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.header-subtitle {
-  font-size: 13px;
-  color: var(--text-dim);
-  letter-spacing: 1px;
-}
+/* 顶部导航栏已统一为 topbar.css（与导航控制页共用），旧 .header 样式已移除 */
 
 /* ========== Main ========== */
 .main {
@@ -425,10 +392,6 @@ body {
     min-height: 120px;
     max-height: 250px;
   }
-
-  .header-subtitle {
-    display: none;
-  }
 }
 
 /* ================================================================
@@ -438,17 +401,6 @@ body {
   :root {
     --padding: 8px;
     --gap: 8px;
-    --header-height: 46px;
-  }
-
-  .header {
-    padding: 6px 12px;
-  }
-  .logo-text {
-    font-size: 16px;
-  }
-  .logo-icon {
-    font-size: 18px;
   }
 
   .card {

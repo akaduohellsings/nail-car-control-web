@@ -5,19 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>钉探 - 智能小车远程控制</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="topbar.css" />
   <link rel="stylesheet" href="connection-settings.css" />
 </head>
 <body>
   <div class="app">
-    <!-- 顶部导航栏 -->
-    <header class="header">
-      <div class="header-logo">
-        <span class="logo-icon">🔩</span>
-        <span class="logo-text">钉探</span>
-      </div>
-      <div class="header-subtitle">智能小车道路钉子识别系统</div>
-      <button id="settingsButton" type="button">连接设置</button>
-      <a href="navigation.html" style="margin-left:auto;color:var(--accent2);white-space:nowrap;text-decoration:none">导航控制 →</a>
+    <!-- 顶部导航栏（与导航控制页共用 topbar.css） -->
+    <header class="topbar">
+      <a class="brand" href="index.html"><span class="brand-mark">钉</span><strong>钉探<span>机器人控制台</span></strong></a>
+      <nav aria-label="控制页面"><a href="index.html" aria-current="page">手动控制</a><a href="navigation.html">导航控制</a></nav>
+      <span class="topbar-spacer"></span>
+      <button class="button subtle" id="settingsButton" type="button">连接设置</button>
     </header>
 
     <!-- 主体内容区 -->
