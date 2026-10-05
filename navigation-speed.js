@@ -12,3 +12,9 @@ export function parseSpeedInputs(linear,angularDeg,policy=null){
 export function speedText(limits){
   return `${Number(limits.linear_m_s.toFixed(3))} 米/秒 · ${(limits.angular_rad_s*180/Math.PI).toFixed(2)} 度/秒`;
 }
+
+/** Restore drafts before connecting; execution still uses the connected service policy. */
+export function parseSpeedDraft(value){
+  if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('速度草稿格式错误');
+  return parseSpeedInputs(value.linear_m_s,value.angular_deg_s,{linear_max_m_s:.3,angular_max_rad_s:.24});
+}

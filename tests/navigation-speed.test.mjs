@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseSpeedInputs,speedText,DEFAULT_SPEEDS} from '../navigation-speed.js';
+import {parseSpeedInputs,parseSpeedDraft,speedText,DEFAULT_SPEEDS} from '../navigation-speed.js';
 
 test('speed inputs convert degrees to radians without changing distance units',()=>{
   const value=parseSpeedInputs(.025,10);
@@ -20,4 +20,10 @@ test('blank, nonpositive, nonfinite and over-profile speeds are rejected',()=>{
     assert.throws(()=>parseSpeedInputs(linear,angular));
   assert.throws(()=>parseSpeedInputs(.025,10,{linear_max_m_s:.06,angular_max_rad_s:.08}));
   assert.ok(parseSpeedInputs(.025,4.58,{linear_max_m_s:.06,angular_max_rad_s:.08}));
+});
+
+test('high speed draft restores before connecting without relaxing execution limits',()=>{
+  for(const speed of [.15,.29,.3])assert.equal(parseSpeedDraft({linear_m_s:speed,angular_deg_s:13}).linear_m_s,speed);
+  assert.throws(()=>parseSpeedInputs(.29,13));
+  for(const value of [null,[],{linear_m_s:true,angular_deg_s:13},{linear_m_s:.301,angular_deg_s:13},{linear_m_s:.1,angular_deg_s:NaN}])assert.throws(()=>parseSpeedDraft(value));
 });

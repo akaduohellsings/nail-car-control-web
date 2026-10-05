@@ -3,7 +3,7 @@ import {loadConfig} from './connection-config.js';
 import {installSettings} from './connection-settings.js';
 import { createNavigationApi, controlPolicy } from './navigation-api.js';
 import {createMapView} from './navigation-map.js';
-import {parseSpeedInputs,speedText} from './navigation-speed.js';
+import {parseSpeedInputs,parseSpeedDraft,speedText} from './navigation-speed.js';
 
 const $ = (id) => document.getElementById(id);
 const KEYS = { goal: 'nail.navigation.goalDraft.v1',speed:'nail.navigation.speedDraft.v1' };
@@ -82,7 +82,7 @@ function updateControls(){
   pick.querySelector('span').textContent=loadedMapId?'点击地图空白区':'等待地图';
 }
 function showResult(result){
-  const name=operationNames[result.command]||'操作';
+  const name=result.command==='stop'&&currentStatus?.capabilities?.stop_ends_task?'停止任务':operationNames[result.command]||'操作';
   const suffix=currentStatus?.capabilities?.environment==='local_simulation'||currentStatus?.capabilities?.preview?'（模拟）':'';
   const texts={pending:'已接收，等待状态确认',succeeded:result.command==='start'||result.command==='resume'?'导航已接受'+suffix:'已完成'+suffix,
     failed:'执行失败',rejected:'已拒绝'};
@@ -126,6 +126,7 @@ function renderStatus(data) {
     document.querySelector('.map-footer>span').textContent='坐标系：map';
     document.querySelector('.map-card .card-heading p').textContent=online&&c?.localization_valid?'地图已连接 / 定位可用':'定位未确认';
   }
+  $('stopButton').textContent=data.capabilities?.stop_ends_task?'停止任务':'停止并暂停任务';
   $('startButton').querySelector('span').textContent=data.capabilities?.environment==='robot_navigation'?'真实导航':'等待服务就绪';
   if(data.capabilities?.preview)$('startButton').querySelector('span').textContent='模拟反馈';
   if(data.read_only===false)$('modeNotice').textContent=data.capabilities?.preview?'接口预览 · 地图与导航反馈均模拟':data.capabilities?.environment==='robot_navigation'
@@ -265,7 +266,7 @@ try {
 } catch { log('已有目标草稿无法读取，请重新填写。', true); }
 try{
   const saved=read(KEYS.speed);
-  if(saved){const v=JSON.parse(saved);parseSpeedInputs(v.linear_m_s,v.angular_deg_s);
+  if(saved){const v=JSON.parse(saved);parseSpeedDraft(v);
     $('maxLinearSpeed').value=v.linear_m_s;$('maxAngularSpeed').value=v.angular_deg_s;speedEdited=true;}
 }catch{log('已有速度草稿无法读取，请重新填写。',true);}
 $('goalForm').addEventListener('submit', (event) => {
