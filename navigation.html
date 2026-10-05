@@ -44,7 +44,42 @@
         </section>
         <section class="card" aria-labelledby="taskTitle">
           <div class="card-heading"><div><h2 id="taskTitle">任务状态</h2><p>以节点回传状态为准</p></div><span class="small-tag" id="taskBadge">未获取</span></div>
-          <dl class="status-list"><div><dt>运行模式</dt><dd id="missionMode">—</dd></div><div><dt>任务阶段</dt><dd id="missionState">—</dd></div><div><dt>当前目标</dt><dd id="missionGoal">—</dd></div><div><dt>控制权</dt><dd id="controlOwner">未接入</dd></div><div><dt>控制阶段</dt><dd id="controlPhase">—</dd></div><div><dt>操作页面</dt><dd id="controllerPage">—</dd></div><div><dt>停车确认</dt><dd id="stationaryState">未确认</dd></div><div><dt>导航服务</dt><dd id="actionReady">未确认</dd></div><div><dt>取消 / 停车阶段</dt><dd id="haltState">—</dd></div><div><dt>清理模式</dt><dd id="cleaningMode">—</dd></div><div><dt>当前尝试次数</dt><dd id="attemptState">—</dd></div><div><dt>故障 / 告警</dt><dd id="missionAlarm">—</dd></div><div><dt>数据更新时间</dt><dd id="statusTime">—</dd></div><div><dt>心跳序号</dt><dd id="statusSequence">—</dd></div></dl>
+          <div class="status-groups">
+            <section class="status-group">
+              <h3 class="status-group-title">任务运行</h3>
+              <dl class="status-grid">
+                <div class="status-item"><dt>运行模式</dt><dd id="missionMode">—</dd></div>
+                <div class="status-item"><dt>任务阶段</dt><dd id="missionState">—</dd></div>
+                <div class="status-item wide"><dt>当前目标</dt><dd id="missionGoal">—</dd></div>
+                <div class="status-item"><dt>当前尝试次数</dt><dd id="attemptState">—</dd></div>
+              </dl>
+            </section>
+            <section class="status-group">
+              <h3 class="status-group-title">控制权</h3>
+              <dl class="status-grid">
+                <div class="status-item"><dt>控制权</dt><dd id="controlOwner">未接入</dd></div>
+                <div class="status-item"><dt>控制阶段</dt><dd id="controlPhase">—</dd></div>
+                <div class="status-item"><dt>操作页面</dt><dd id="controllerPage">—</dd></div>
+              </dl>
+            </section>
+            <section class="status-group">
+              <h3 class="status-group-title">服务与停车</h3>
+              <dl class="status-grid">
+                <div class="status-item"><dt>停车确认</dt><dd id="stationaryState">未确认</dd></div>
+                <div class="status-item"><dt>导航服务</dt><dd id="actionReady">未确认</dd></div>
+                <div class="status-item"><dt>清理模式</dt><dd id="cleaningMode">—</dd></div>
+                <div class="status-item wide"><dt>取消 / 停车阶段</dt><dd id="haltState">—</dd></div>
+              </dl>
+            </section>
+            <section class="status-group">
+              <h3 class="status-group-title">数据</h3>
+              <dl class="status-grid">
+                <div class="status-item"><dt>心跳序号</dt><dd id="statusSequence">—</dd></div>
+                <div class="status-item wide"><dt>数据更新时间</dt><dd id="statusTime">—</dd></div>
+                <div class="status-item wide"><dt>故障 / 告警</dt><dd id="missionAlarm">—</dd></div>
+              </dl>
+            </section>
+          </div>
           <div class="task-actions"><button class="button subtle" id="pauseButton" disabled>暂停任务</button><button class="button subtle" id="resumeButton" disabled>恢复任务</button></div>
           <p class="form-hint">暂停后保持暂停，需要显式恢复。HTTP 接收不代表停车完成。</p><div class="command-panel"><p id="commandFeedback" role="status">尚未发送操作</p><button class="text-button" id="resetButton" disabled>重置任务</button></div>
         </section>
