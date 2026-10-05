@@ -1,5 +1,13 @@
 # Web 单点导航（2026-10-05）
 
+## 最新提速试验（2026-10-05 12:35）
+
+用户确认复位并授权提速后，保留独立速度/电量/位移保护，仅调整临时规划参数。Web开始→约12 cm暂停→确认停车约10.95秒→恢复原0.4 m目标→到达→停止完成；用户确认“更快、更连续，最终已停下”。排除主动暂停后，两段导航Action合计由23.9秒降至12.7秒，缩短约47%；两次各一轮、暂停位置/终点/电压不同，不能推广为普遍提升。截图 [暂停确认](navigation-speed-trial-paused.png)、[最后停止](navigation-speed-trial-finished.png)。
+
+本轮里程计前移0.38128 m，map终点约(0.38614,0.00171,0.000760 rad)，在3 cm临时容差内；最高前进命令0.04396 m/s，实测速度峰值0.09868 m/s，电压10.317–10.450 V。独立命令上限仍0.06 m/s、实测保护仍0.12 m/s、低电量门槛仍10 V。临时规划参数vx_max=0.08、vx_std=0.035经过读取核对，没有设为永久默认。
+
+雷达在停止帧写入后的SIGINT清理阶段退出-2，原报告passed=false/shutdown_clean=false保持；运行完成与整体清理验收分别记录。进程核对无运动服务残留，已恢复正常8091只读地图，定位未确认、开始禁用，小车保持约0.38 m终点。[恢复后的页面](navigation-speed-trial-restored-readonly.png)。小车项目报告为 `test_results/web_navigation_speed_trial_motion_result.json` 和 `web_navigation_speed_trial_comparison.json`，详细说明 `docs/web_navigation_speed_trial_20261005.md`。下一步先处理退出异常，再决定提速配置，不从当前终点初始化回零或继续加速。
+
 ## 最新完整 Web 流程验收（2026-10-05 12:14）
 
 本轮从用户重新确认的建图起点出发，真实网页开始→前进约5.4 cm后暂停→确认停车约9秒→恢复同一0.4 m目标→到达→停止已完整通过。start/pause/resume/stop成功回执齐全；原Nav2目标取消确认，恢复的新Action到达，最终无所属目标且保护器静止、未授权、零输出。用户现场确认完整现象。截图 [暂停完成](navigation-real-paused-confirmed.png)、[恢复后停止完成](navigation-real-resumed-stopped.png)。
