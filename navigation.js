@@ -59,7 +59,7 @@ function renderSpeeds(){
   $('maxAngularSpeed').max=Math.floor((policy?.angular_max_rad_s??.24)*180/Math.PI*100)/100;
   const running=currentStatus?.connection==='ONLINE'&&currentStatus?.mission&&!['IDLE','PAUSED','FAULT'].includes(currentStatus.mission.state);
   $('maxLinearSpeed').disabled=running;$('maxAngularSpeed').disabled=running;
-  let hint=policy?'速度随下一次开始导航生效；暂停、恢复沿用该次设置。':'可保存速度草稿，连接支持速度设置的导航服务后生效。';
+  let hint=policy?`移动速度上限 ${policy.linear_max_m_s} 米/秒。速度随下一次开始导航生效；暂停、恢复沿用该次设置。`:'可保存速度草稿，连接支持速度设置的导航服务后生效。';
   try{speedInputs();}catch(error){hint=error.message;}
   $('speedHint').textContent=hint;
   const applied=currentStatus?.connection==='ONLINE'?currentStatus?.control?.speed_limits:null;
