@@ -16,5 +16,5 @@ export function speedText(limits){
 /** Restore drafts before connecting; execution still uses the connected service policy. */
 export function parseSpeedDraft(value){
   if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('速度草稿格式错误');
-  return parseSpeedInputs(value.linear_m_s,value.angular_deg_s,{linear_max_m_s:.3,angular_max_rad_s:.24});
+  return parseSpeedInputs(value.linear_m_s,value.angular_deg_s,{linear_max_m_s:.3,angular_max_rad_s:Math.PI/4});
 }

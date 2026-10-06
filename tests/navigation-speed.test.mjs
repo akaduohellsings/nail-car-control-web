@@ -27,3 +27,11 @@ test('high speed draft restores before connecting without relaxing execution lim
   assert.throws(()=>parseSpeedInputs(.29,13));
   for(const value of [null,[],{linear_m_s:true,angular_deg_s:13},{linear_m_s:.301,angular_deg_s:13},{linear_m_s:.1,angular_deg_s:NaN}])assert.throws(()=>parseSpeedDraft(value));
 });
+
+test('45 degree map limit converts correctly and legacy policy stays restricted',()=>{
+  const policy={linear_max_m_s:.3,angular_max_rad_s:Math.PI/4};
+  assert.equal(parseSpeedInputs(.05,45,policy).angular_rad_s,Math.PI/4);
+  assert.equal(parseSpeedDraft({linear_m_s:.05,angular_deg_s:45}).angular_rad_s,Math.PI/4);
+  assert.throws(()=>parseSpeedInputs(.05,45.01,policy));
+  assert.throws(()=>parseSpeedInputs(.05,45,{linear_max_m_s:.3,angular_max_rad_s:.24}));
+});
