@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import urllib.request
+from urllib.parse import urlsplit
 
 
 class OperatorRecovery:
@@ -16,6 +17,19 @@ class OperatorRecovery:
 
     def config(self):
         return json.loads((self.project/'config/web_navigation_operator.json').read_text(encoding='utf-8-sig'))
+
+    def connection_settings(self):
+        """Read local configuration only; never probe or start the robot."""
+        config=self.config();host=config['host'];port=config.get('navigation_port',8092)
+        if not isinstance(host,str) or not host or any(c in host for c in '/@?# \\'):
+            raise ValueError('启动配置中的小车地址无效。')
+        authority='['+host+']' if ':' in host and not host.startswith('[') else host
+        parsed=urlsplit('http://'+authority)
+        if not parsed.hostname or parsed.port is not None or type(port) is not int or not 1<=port<=65535:
+            raise ValueError('启动地址或导航端口无效。')
+        root='http://'+authority
+        return dict(schema_version=1,robotUrl=root,videoUrl=root+':8080',controlUrl=root+':5000',
+                    eventsUrl=root+':5001',navigationUrl=root+':'+str(port))
 
     def snapshot(self):
         with self.lock:

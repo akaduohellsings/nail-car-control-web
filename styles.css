@@ -459,3 +459,7 @@ body {
     font-size: 13px;
   }
 }
+.video-detail { color:#8b9aaf;font-size:12px;line-height:1.6;margin:5px 0;overflow-wrap:anywhere }
+#videoStatus { animation:none;color:#e6edf3;text-shadow:0 0 4px #000 }
+#videoStatus[data-state="ONLINE"] { color:#80dfb1 }
+#videoStatus[data-state="UNREACHABLE"],#videoStatus[data-state="NO_FRAMES"],#videoStatus[data-state="STALLED"] { color:#ff9a9f }

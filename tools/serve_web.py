@@ -29,7 +29,10 @@ def make_handler(port, runtime=None, recovery=None):
 
         def do_GET(self):
             path = self.path.split('?', 1)[0]
-            if recovery is not None and path == '/api/operator/status':
+            if recovery is not None and path == '/api/operator/connection':
+                try:self.respond(200,recovery.connection_settings())
+                except (ValueError,KeyError,OSError) as error:self.respond(400,{'error':str(error)})
+            elif recovery is not None and path == '/api/operator/status':
                 self.respond(200,recovery.snapshot())
             elif runtime is not None and path == '/api/v1/status':
                 self.respond(200, runtime.snapshot())

@@ -27,6 +27,30 @@ class RecoveryTests(unittest.TestCase):
         self.addCleanup(self.probe.stop)
     def tearDown(self):self.temp.cleanup()
 
+    def test_connection_settings_are_local_only_and_do_not_expose_credentials(self):
+        with patch('operator_recovery.subprocess.run') as run:
+            data=self.recovery.connection_settings()
+            self.assertEqual(data['videoUrl'],'http://192.168.137.2:8080')
+            self.assertEqual(data['navigationUrl'],'http://192.168.137.2:8092')
+            self.assertEqual(len(data),6)
+            run.assert_not_called();self.probe_mock.assert_not_called()
+        for host in ['192.168.55.1','::1','[::1]']:
+            (self.root/'config/web_navigation_operator.json').write_text(json.dumps({'host':host,'navigation_port':8093}))
+            self.assertEqual(self.recovery.connection_settings()['navigationUrl'],
+                'http://'+('192.168.55.1' if host=='192.168.55.1' else '[::1]')+':8093')
+        for config in [{'host':'http://robot'},{'host':'robot:8080'},{'host':'robot','navigation_port':True},{'host':'robot','navigation_port':70000}]:
+            (self.root/'config/web_navigation_operator.json').write_text(json.dumps(config))
+            with self.assertRaises(ValueError):self.recovery.connection_settings()
+
+    def test_http_connection_endpoint_reads_config_without_robot_probe(self):
+        server=ThreadingHTTPServer(('127.0.0.1',0),make_handler(0,recovery=self.recovery))
+        thread=threading.Thread(target=server.serve_forever);thread.start()
+        try:
+            with urllib.request.urlopen(f'http://127.0.0.1:{server.server_port}/api/operator/connection') as response:
+                self.assertEqual(json.load(response)['videoUrl'],'http://192.168.137.2:8080')
+            self.probe_mock.assert_not_called()
+        finally:server.shutdown();thread.join();server.server_close()
+
     def test_requires_explicit_origin_and_matching_host(self):
         for data in [{},{'confirmed_origin':True,'expected_host':'192.168.55.1'}]:
             with self.assertRaises(ValueError):self.recovery.start(data)

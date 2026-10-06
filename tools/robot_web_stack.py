@@ -11,7 +11,53 @@ import signal
 import socket
 import subprocess
 import time
+import urllib.parse
+import urllib.request
 from pathlib import Path
+
+
+def verify_video_streams(base_url='http://127.0.0.1:8080',
+                         topics=('/camera/color/image_raw', '/detected_image'),
+                         timeout=8, check=lambda: None):
+    """Require two complete JPEG frames per topic through the actual HTTP path."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    counts = {}
+    for topic in topics:
+        url = base_url.rstrip('/') + '/stream?' + urllib.parse.urlencode({'topic': topic})
+        deadline = time.monotonic() + timeout
+        pending = b''
+        count = 0
+        try:
+            check()
+            with opener.open(url, timeout=timeout) as response:
+                content_type = response.headers.get('Content-Type', '').lower()
+                if 'multipart/' not in content_type:
+                    raise RuntimeError('Expected MJPEG, received ' + content_type)
+                while count < 2 and time.monotonic() < deadline:
+                    check()
+                    chunk = response.read1(65536)
+                    if not chunk:
+                        break
+                    pending += chunk
+                    while True:
+                        start = pending.find(b'\xff\xd8')
+                        if start < 0:
+                            pending = pending[-1:]
+                            break
+                        pending = pending[start:]
+                        end = pending.find(b'\xff\xd9', 2)
+                        if end < 0:
+                            break
+                        count += 1
+                        pending = pending[end+2:]
+                    if len(pending) > 4 * 1024 * 1024:
+                        raise RuntimeError('Incomplete JPEG exceeds 4 MiB')
+                if count < 2:
+                    raise RuntimeError('Received ' + str(count) + '/2 complete JPEG frames')
+                counts[topic] = count
+        except (OSError, ValueError, RuntimeError) as error:
+            raise RuntimeError('VIDEO_NOT_READY ' + url + ': ' + str(error)) from error
+    return counts
 
 CAMERA = r'''
 import time, rclpy
@@ -158,7 +204,8 @@ def main():
         if waiting:
             raise RuntimeError('Web ports not ready: ' + str(sorted(waiting)))
         report['listening_ports'] = [5000, 8080]
-        print('Web ports are listening. No chassis or radar started.', flush=True)
+        report['video_frames'] = verify_video_streams()
+        print('Raw and YOLO video frames received over HTTP. No chassis or radar started.', flush=True)
         report['ready'] = True
         while True:
             for name, process in processes:

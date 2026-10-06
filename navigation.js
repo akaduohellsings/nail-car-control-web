@@ -1,6 +1,6 @@
 import {stateLabels, connectionLabels} from './task-labels.js';
-import {loadConfig} from './connection-config.js';
-import {installSettings} from './connection-settings.js';
+import {loadConfig} from './connection-config.js?v=20261006-video-network';
+import {installSettings} from './connection-settings.js?v=20261006-video-network';
 import { createNavigationApi, controlPolicy } from './navigation-api.js?v=20261006-waypoints';
 import {createMapView} from './navigation-map.js?v=20261006-waypoints';
 import {MAX_WAYPOINTS,parseRouteDraft,routeStartPayload,routeActive,routeProgress} from './navigation-route.js';

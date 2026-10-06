@@ -1,7 +1,7 @@
-import {createVideoMonitor, createEventMonitor} from './service-monitor.js';
-import {loadConfig} from './connection-config.js';
-import {installSettings} from './connection-settings.js';
-import {createNavigationApi, controlPolicy} from './navigation-api.js?v=20261006-real-pickup';
+import {createVideoMonitor, createEventMonitor} from './service-monitor.js?v=20261006-video-network';
+import {loadConfig} from './connection-config.js?v=20261006-video-network';
+import {installSettings} from './connection-settings.js?v=20261006-video-network';
+import {createNavigationApi, controlPolicy} from './navigation-api.js?v=20261006-waypoints';
 import {stateLabels, connectionLabels} from './task-labels.js';
 import {bindManualInput} from './manual-input.js';
 
@@ -146,10 +146,17 @@ window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();
 // Reception timestamps are separate from ROS source freshness and motion status.
 let lastEventState='';
 const video=createVideoMonitor({image:$('cameraImage'),onStatus:data=>{
-  const labels={PAUSED:'画面已暂停',CONNECTING:'正在连接视频',UNVERIFIED:'帧时间未提供',ONLINE:'正在接收画面',UNREACHABLE:'视频不可用'};
+  const labels={PAUSED:'画面已暂停',CONNECTING:'正在连接视频',WAITING_FRAMES:'视频已连接 · 等待图像',
+    NO_FRAMES:'视频已连接 · 未收到图像',STALLED:'画面中断',UNVERIFIED:'兼容模式 · 帧时间未提供',ONLINE:'正在接收画面',UNREACHABLE:'视频不可用 · 服务未连接'};
   $('videoStatus').textContent=labels[data.state]+(data.retrySeconds?' · '+data.retrySeconds+' 秒后重试':'');
+  $('videoStatus').dataset.state=data.state;
   $('cameraTime').textContent=data.receivedAt?'接收 '+new Date(data.receivedAt).toLocaleTimeString('zh-CN',{hour12:false}):'实时性未确认';
   $('videoStatus').title=data.state==='UNVERIFIED'?'旧视频服务未提供可读取的帧时间，无法确认画面是否冻结。':data.error||'';
+  const hints={CONNECTING:'连接小车的视频服务，不会发送移动命令。',WAITING_FRAMES:'服务已响应，正在等待所选画面的图像。',
+    NO_FRAMES:'检查相机或YOLO输出，可切换到原始画面排查。',STALLED:'已停止更新，正在自动重连。',
+    UNREACHABLE:'核对下方地址，并确认已完整启动小车服务；仅打开网页不会启动摄像头。',
+    UNVERIFIED:'兼容显示模式可看画面，但无法确认逐帧更新时间。',ONLINE:'图像正在更新。',PAUSED:'页面进入后台时暂停接收，回到本页会重新连接。'};
+  $('videoHint').textContent=data.error||hints[data.state]||'';
 }});
 const events=createEventMonitor({onStatus:data=>{
   const labels={ONLINE:data.sourceFresh===true?'检测源数据新鲜':'检测接口可达 · 源时间未提供',STALE:'检测数据已过期',UNREACHABLE:'检测事件服务不可达'};
@@ -157,11 +164,14 @@ const events=createEventMonitor({onStatus:data=>{
   $('detectionStatus').title=data.receivedAt?'最近接收：'+new Date(data.receivedAt).toLocaleTimeString('zh-CN'):data.error||'';
   if(data.state!==lastEventState){addMessage('system',labels[data.state]);lastEventState=data.state;}
 },onEvent:data=>addEvent('🔩',data.message)});
-function restartMonitors(){
+function restartVideo(){
+  $('videoEndpoint').textContent=`视频服务：${config.videoUrl} · ${$('videoTopic').selectedOptions[0].textContent}`;
+  $('cameraImage').alt=$('videoTopic').value==='/detected_image'?'YOLO检测画面':'相机原始画面';
   if(document.hidden)return;
-  video.start(config.videoUrl,$('videoTopic').value);events.start(config.eventsUrl);
+  video.start(config.videoUrl,$('videoTopic').value);
 }
-$('videoTopic').addEventListener('change',()=>video.start(config.videoUrl,$('videoTopic').value));
+function restartMonitors(){restartVideo();if(!document.hidden)events.start(config.eventsUrl);}
+$('videoTopic').addEventListener('change',restartVideo);
 $('retryVideoButton').addEventListener('click',()=>video.start(config.videoUrl,$('videoTopic').value));
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){video.stop();events.stop();$('detectionStatus').textContent='检测接收已暂停';}

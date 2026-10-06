@@ -1,6 +1,44 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createJpegParser,createEventMonitor} from '../service-monitor.js';
+import {createJpegParser,createEventMonitor,createVideoMonitor} from '../service-monitor.js';
+
+function videoHarness(fetcher){
+  let time=0,id=0;const jobs=new Map(),states=[];
+  const clock={setTimeout:fn=>{jobs.set(++id,fn);return id;},clearTimeout:key=>jobs.delete(key),
+    setInterval:fn=>{jobs.set(++id,fn);return id;},clearInterval:key=>jobs.delete(key)};
+  const image={src:'',naturalWidth:0,removeAttribute(){this.src='';}};
+  const monitor=createVideoMonitor({image,clock,now:()=>time,onStatus:value=>states.push(value),fetcher});
+  return {monitor,image,states,tick(){time+=6000;for(const fn of [...jobs.values()])fn();}};
+}
+const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
+function abortable(signal){return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true}));}
+
+test('video distinguishes missing service from connected service without images',async()=>{
+  for(const connected of [false,true]){
+    const h=videoHarness(async(_url,{signal})=>connected?{ok:true,body:{getReader:()=>({read:()=>abortable(signal),releaseLock(){}})}}:await abortable(signal));
+    h.monitor.start('http://video');await flush();h.tick();await flush();
+    assert.equal(h.states.at(-1).state,connected?'NO_FRAMES':'UNREACHABLE');
+    assert.equal(h.states.at(-1).url,'http://video/stream?topic=%2Fdetected_image');h.monitor.stop();
+  }
+});
+test('video displays frames, detects stalls, and ignores old replies after switching',async()=>{
+  let first=true;
+  const h=videoHarness(async(_url,{signal})=>({ok:true,body:{getReader:()=>({
+    read:async()=>{if(first){first=false;return {done:false,value:new Uint8Array([255,216,1,255,217])};}return abortable(signal);},releaseLock(){}})}}));
+  h.monitor.start('http://video','/camera/color/image_raw');await flush();
+  assert.equal(h.states.at(-1).state,'ONLINE');assert.match(h.image.src,/^blob:/);
+  h.tick();await flush();assert.equal(h.states.at(-1).state,'STALLED');h.monitor.stop();
+  const resolvers=[],late=videoHarness(()=>new Promise(resolve=>resolvers.push(resolve)));
+  late.monitor.start('http://old');late.monitor.start('http://new');
+  let canceled=false;resolvers[0]({ok:true,body:{cancel:async()=>{canceled=true;}}});await flush();
+  assert.equal(canceled,true);assert.equal(late.states.at(-1).url,'http://new/stream?topic=%2Fdetected_image');late.monitor.stop();
+});
+test('legacy server without CORS retains image compatibility and reports failed loading',async()=>{
+  const h=videoHarness(async()=>{throw new TypeError('Failed to fetch');});
+  h.monitor.start('http://legacy');await flush();
+  assert.equal(h.states.at(-1).state,'UNVERIFIED');assert.match(h.image.src,/http:\/\/legacy/);
+  h.image.onerror();assert.equal(h.states.at(-1).state,'UNREACHABLE');h.monitor.stop();
+});
 
 test('MJPEG parser reconstructs multiple JPEGs split across boundaries',()=>{
   const frames=[],parse=createJpegParser(frame=>frames.push([...frame]));

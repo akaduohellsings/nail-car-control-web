@@ -59,51 +59,56 @@ export function createJpegParser(onFrame) {
   };
 }
 
-export function createVideoMonitor({image,onStatus,fetcher=fetch}) {
+export function createVideoMonitor({image,onStatus,fetcher=fetch,now=()=>Date.now(),
+    clock={setTimeout:(...args)=>globalThis.setTimeout(...args),clearTimeout:id=>globalThis.clearTimeout(id),
+      setInterval:(...args)=>globalThis.setInterval(...args),clearInterval:id=>globalThis.clearInterval(id)}}) {
   let generation=0,abort=null,retry=null,watchdog=null,blobUrl=null,url='',attempt=0;
   function clear(){
-    clearTimeout(retry);clearInterval(watchdog);abort?.abort();
+    clock.clearTimeout(retry);clock.clearInterval(watchdog);abort?.abort();
     image.onload=null;image.onerror=null;image.removeAttribute('src');
     if(blobUrl){URL.revokeObjectURL(blobUrl);blobUrl=null;}
   }
   function stop(){generation++;clear();onStatus({state:'PAUSED'});}
   function start(baseUrl,topic='/detected_image'){
-    stop();url=baseUrl+'/stream?topic='+encodeURIComponent(topic);attempt=0;
+    stop();url=baseUrl.replace(/\/$/,'')+'/stream?topic='+encodeURIComponent(topic);attempt=0;
     const epoch=generation;
-    const failed=error=>{
+    const failed=(error,state='UNREACHABLE')=>{
       if(epoch!==generation)return;
       clear();const delay=Math.min(30000,2000*2**Math.min(attempt++,4));
-      onStatus({state:'UNREACHABLE',retrySeconds:delay/1000,error:error.message});
-      retry=setTimeout(connect,delay);
+      onStatus({state,retrySeconds:delay/1000,error:error.message,url,topic});
+      retry=clock.setTimeout(connect,delay);
     };
     const fallback=()=>{
       if(epoch!==generation)return;
-      onStatus({state:'UNVERIFIED'});
-      image.onload=()=>{if(epoch===generation)onStatus({state:'UNVERIFIED',loaded:true});};
+      onStatus({state:'UNVERIFIED',url,topic});
+      image.onload=()=>{if(epoch===generation)onStatus({state:'UNVERIFIED',loaded:true,url,topic});};
       image.onerror=()=>failed(new Error('视频连接失败'));
       image.src=url;
       let waited=0;
-      watchdog=setInterval(()=>{
-        if(image.naturalWidth){clearInterval(watchdog);onStatus({state:'UNVERIFIED',loaded:true});}
-        else if(++waited>=10)failed(new Error('未收到画面'));
+      watchdog=clock.setInterval(()=>{
+        if(image.naturalWidth){clock.clearInterval(watchdog);onStatus({state:'UNVERIFIED',loaded:true,url,topic});}
+        else if(++waited>=10)failed(new Error('兼容模式未加载图像，请检查视频地址和画面来源'));
       },1000);
     };
     const connect=async()=>{
       if(epoch!==generation)return;
-      onStatus({state:'CONNECTING'});abort=new AbortController();const ownAbort=abort;
-      let receivedAt=Date.now(),responseReceived=false;
-      watchdog=setInterval(()=>{if(Date.now()-receivedAt>5000)ownAbort.abort();},500);
+      onStatus({state:'CONNECTING',url,topic});abort=new AbortController();const ownAbort=abort;
+      let receivedAt=now(),responseReceived=false,streamConnected=false,frames=0,timedOut=false;
+      watchdog=clock.setInterval(()=>{if(now()-receivedAt>5000){timedOut=true;ownAbort.abort();}},500);
       try{
         const response=await fetcher(url,{signal:ownAbort.signal,cache:'no-store'});
         responseReceived=true;
         if(epoch!==generation){await response.body?.cancel();return;}
         if(!response.ok||!response.body)throw new Error('视频服务返回 '+response.status);
+        streamConnected=true;
+        receivedAt=now();
+        onStatus({state:'WAITING_FRAMES',url,topic});
         const parser=createJpegParser(bytes=>{
           if(epoch!==generation)return;
-          receivedAt=Date.now();attempt=0;
+          receivedAt=now();attempt=0;frames++;
           const next=URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'})),previous=blobUrl;
           blobUrl=next;image.src=next;if(previous)URL.revokeObjectURL(previous);
-          onStatus({state:'ONLINE',receivedAt});
+          onStatus({state:'ONLINE',receivedAt,url,topic});
         });
         const reader=response.body.getReader();
         try{
@@ -112,10 +117,12 @@ export function createVideoMonitor({image,onStatus,fetcher=fetch}) {
         if(epoch===generation)throw new Error('视频流已结束');
       }catch(error){
         if(epoch!==generation)return;
-        clearInterval(watchdog);
+        clock.clearInterval(watchdog);
         // Legacy MJPEG servers may omit CORS. An <img> can display them,
         // but cannot expose per-frame freshness to JavaScript.
-        if(!responseReceived&&error.name==='TypeError')fallback();else failed(error);
+        if(!responseReceived&&!timedOut&&error.name==='TypeError')fallback();
+        else if(streamConnected)failed(new Error(frames?'视频流已中断，请检查画面源和网络':'视频服务已连接，但没有收到该画面的图像'),frames?'STALLED':'NO_FRAMES');
+        else failed(timedOut?new Error('视频服务连接超时，请检查小车地址、8080端口和启动状态'):error);
       }
     };
     void connect();
