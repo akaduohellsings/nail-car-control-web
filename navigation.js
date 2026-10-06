@@ -2,7 +2,7 @@ import {stateLabels, connectionLabels} from './task-labels.js';
 import {loadConfig} from './connection-config.js';
 import {installSettings} from './connection-settings.js';
 import { createNavigationApi, controlPolicy } from './navigation-api.js';
-import {createMapView} from './navigation-map.js';
+import {createMapView} from './navigation-map.js?v=20261006-layout2';
 import {parseSpeedInputs,parseSpeedDraft,speedText} from './navigation-speed.js';
 
 const $ = (id) => document.getElementById(id);
@@ -18,6 +18,7 @@ const log = (message, error = false) => {
   item.append(time, text);
   $('operationLog').prepend(item);
   while ($('operationLog').children.length > 50) $('operationLog').lastChild.remove();
+  $('operationLog').scrollTop = 0;
 };
 function read(key) { try { return localStorage.getItem(key); } catch { return null; } }
 function save(key, value) {

@@ -109,14 +109,18 @@ export function createMapView(stage, onSelect) {
   });
   const observer=new ResizeObserver(resize);observer.observe(stage);resize();
   return {
-    setMap(value){map=validateMap(value);bitmap.width=map.width;bitmap.height=map.height;
+    setMap(value){
+      const next=validateMap(value);
+      const sameView=map&&map.map_id===next.map_id&&map.width===next.width&&map.height===next.height
+        &&map.resolution===next.resolution&&['x','y','yaw'].every(k=>map.origin[k]===next.origin[k]);
+      map=next;bitmap.width=map.width;bitmap.height=map.height;
       const ctx=bitmap.getContext('2d'),image=ctx.createImageData(map.width,map.height);
       for(let row=0;row<map.height;row++)for(let col=0;col<map.width;col++){
         const v=map.data[row*map.width+col],i=((map.height-1-row)*map.width+col)*4;
         const color=v<0?70:Math.round(245*(1-v/100));image.data.set([color,color,color,255],i);
       }
       ctx.putImageData(image,0,0);canvas.hidden=false;stage.querySelector('.map-empty').hidden=true;
-      for(const b of buttons)b.disabled=false;resize();fit();
+      for(const b of buttons)b.disabled=false;resize();if(!sameView)fit();
     },
     update(pose,target,enabled){robot=pose;goal=target?{...target,yaw:target.yaw_deg*Math.PI/180}:null;active=enabled;render();},
     clear(){map=null;gesture=null;canvas.hidden=true;stage.querySelector('.map-empty').hidden=false;for(const b of buttons)b.disabled=true;},

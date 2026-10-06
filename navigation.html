@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>钉探 · 导航控制</title>
   <link rel="stylesheet" href="topbar.css" />
-  <link rel="stylesheet" href="navigation.css" />
+  <link rel="stylesheet" href="navigation.css?v=20261006-layout2" />
   <link rel="stylesheet" href="connection-settings.css" />
 </head>
 <body>
@@ -27,71 +27,69 @@
         <div class="map-footer"><div><span class="legend robot"></span>小车位置 <span class="legend target"></span>目标点</div><span>坐标系：待确认</span></div>
         <div class="map-details"><div><span>当前位置</span><strong>—</strong></div><div><span>车头朝向</span><strong>—</strong></div><div><span>定位状态</span><strong class="muted">未确认</strong></div><div><span>数据更新时间</span><strong>—</strong></div></div>
       </section>
-      <aside class="side-column">
-        <section class="card target-card" aria-labelledby="targetTitle">
-          <div class="card-heading"><div><h2 id="targetTitle">导航目标</h2><p>先选目标，再开始导航</p></div><span class="small-tag">单点导航</span></div>
-          <form id="goalForm">
-            <button class="map-pick button subtle" type="button" disabled>⌖ 在地图上选择目标 <span>待接入</span></button>
-            <div class="coordinate-fields"><label>X 坐标 <span>米</span><input id="goalX" type="number" step="any" placeholder="输入 X" required /></label><label>Y 坐标 <span>米</span><input id="goalY" type="number" step="any" placeholder="输入 Y" required /></label></div>
-            <label class="yaw-field">目标朝向 <span>度</span><input id="goalYaw" type="number" step="any" placeholder="输入朝向角度" required /></label>
-            <div class="coordinate-fields speed-fields"><label>最大移动速度 <span>米/秒</span><input id="maxLinearSpeed" type="number" min="0.001" max="0.06" step="any" value="0.05" required /></label><label>最大转向速度 <span>度/秒</span><input id="maxAngularSpeed" type="number" min="0.01" max="13.75" step="any" value="13.75" required /></label></div>
-            <p class="form-hint" id="speedHint" role="status">速度随下一次开始导航生效；暂停、恢复沿用该次设置。</p>
-            <p class="form-hint" id="appliedSpeed" role="status">本次生效速度：尚未下发</p>
-            <p class="form-hint">坐标需要对应已确认的地图。保存草稿不会发送导航目标。</p>
-            <div class="draft-actions"><button class="button subtle" type="submit">保存目标草稿</button><button class="text-button" id="clearDraft" type="button">清空</button></div>
-            <p id="draftStatus" class="draft-status" role="status">尚未保存目标草稿</p>
-            <button class="button primary full" id="startButton" type="button" disabled>开始导航 <span>等待服务就绪</span></button>
-          </form>
-        </section>
-        <section class="card" aria-labelledby="taskTitle">
-          <div class="card-heading"><div><h2 id="taskTitle">任务状态</h2><p>以节点回传状态为准</p></div><span class="small-tag" id="taskBadge">未获取</span></div>
-          <div class="status-groups">
-            <section class="status-group">
-              <h3 class="status-group-title">任务运行</h3>
-              <dl class="status-grid">
-                <div class="status-item"><dt>运行模式</dt><dd id="missionMode">—</dd></div>
-                <div class="status-item"><dt>任务阶段</dt><dd id="missionState">—</dd></div>
-                <div class="status-item wide"><dt>当前目标</dt><dd id="missionGoal">—</dd></div>
-                <div class="status-item"><dt>当前尝试次数</dt><dd id="attemptState">—</dd></div>
-              </dl>
-            </section>
-            <section class="status-group">
-              <h3 class="status-group-title">控制权</h3>
-              <dl class="status-grid">
-                <div class="status-item"><dt>控制权</dt><dd id="controlOwner">未接入</dd></div>
-                <div class="status-item"><dt>控制阶段</dt><dd id="controlPhase">—</dd></div>
-                <div class="status-item"><dt>操作页面</dt><dd id="controllerPage">—</dd></div>
-              </dl>
-            </section>
-            <section class="status-group">
-              <h3 class="status-group-title">服务与停车</h3>
-              <dl class="status-grid">
-                <div class="status-item"><dt>停车确认</dt><dd id="stationaryState">未确认</dd></div>
-                <div class="status-item"><dt>导航服务</dt><dd id="actionReady">未确认</dd></div>
-                <div class="status-item"><dt>清理模式</dt><dd id="cleaningMode">—</dd></div>
-                <div class="status-item wide"><dt>取消 / 停车阶段</dt><dd id="haltState">—</dd></div>
-              </dl>
-            </section>
-            <section class="status-group">
-              <h3 class="status-group-title">数据</h3>
-              <dl class="status-grid">
-                <div class="status-item"><dt>心跳序号</dt><dd id="statusSequence">—</dd></div>
-                <div class="status-item wide"><dt>数据更新时间</dt><dd id="statusTime">—</dd></div>
-                <div class="status-item wide"><dt>故障 / 告警</dt><dd id="missionAlarm">—</dd></div>
-              </dl>
-            </section>
-          </div>
-          <div class="task-actions"><button class="button subtle" id="pauseButton" disabled>暂停任务</button><button class="button subtle" id="resumeButton" disabled>恢复任务</button></div>
-          <p class="form-hint">暂停后保持暂停，需要显式恢复。HTTP 接收不代表停车完成。</p><div class="command-panel"><p id="commandFeedback" role="status">尚未发送操作</p><button class="text-button" id="resetButton" disabled>重置任务</button></div>
-        </section>
-      </aside>
+      <section class="card target-card" aria-labelledby="targetTitle">
+        <div class="card-heading"><div><h2 id="targetTitle">导航目标</h2><p>先选目标，再开始导航</p></div><span class="small-tag">单点导航</span></div>
+        <form id="goalForm">
+          <button class="map-pick button subtle" type="button" disabled>⌖ 在地图上选择目标 <span>待接入</span></button>
+          <div class="coordinate-fields"><label>X 坐标 <span>米</span><input id="goalX" type="number" step="any" placeholder="输入 X" required /></label><label>Y 坐标 <span>米</span><input id="goalY" type="number" step="any" placeholder="输入 Y" required /></label></div>
+          <label class="yaw-field">目标朝向 <span>度</span><input id="goalYaw" type="number" step="any" placeholder="输入朝向角度" required /></label>
+          <div class="coordinate-fields speed-fields"><label>最大移动速度 <span>米/秒</span><input id="maxLinearSpeed" type="number" min="0.001" max="0.06" step="any" value="0.05" required /></label><label>最大转向速度 <span>度/秒</span><input id="maxAngularSpeed" type="number" min="0.01" max="13.75" step="any" value="13.75" required /></label></div>
+          <p class="form-hint" id="speedHint" role="status">速度随下一次开始导航生效；暂停、恢复沿用该次设置。</p>
+          <p class="form-hint" id="appliedSpeed" role="status">本次生效速度：尚未下发</p>
+          <p class="form-hint">坐标需要对应已确认的地图。保存草稿不会发送导航目标。</p>
+          <div class="draft-actions"><button class="button subtle" type="submit">保存目标草稿</button><button class="button stop-button" id="stopButton" type="button" disabled>停止并暂停任务</button><button class="text-button" id="clearDraft" type="button">清空</button></div>
+          <p id="draftStatus" class="draft-status" role="status">尚未保存目标草稿</p>
+          <button class="button primary full" id="startButton" type="button" disabled>开始导航 <span>等待服务就绪</span></button>
+        </form>
+      </section>
     </div>
+    <section class="card task-card" aria-labelledby="taskTitle">
+      <div class="card-heading"><div><h2 id="taskTitle">任务状态</h2><p>以节点回传状态为准</p></div><span class="small-tag" id="taskBadge">未获取</span></div>
+      <div class="status-groups">
+        <section class="status-group">
+          <h3 class="status-group-title">任务运行</h3>
+          <dl class="status-grid">
+            <div class="status-item"><dt>运行模式</dt><dd id="missionMode">—</dd></div>
+            <div class="status-item"><dt>任务阶段</dt><dd id="missionState">—</dd></div>
+            <div class="status-item wide"><dt>当前目标</dt><dd id="missionGoal">—</dd></div>
+            <div class="status-item"><dt>当前尝试次数</dt><dd id="attemptState">—</dd></div>
+          </dl>
+        </section>
+        <section class="status-group">
+          <h3 class="status-group-title">控制权</h3>
+          <dl class="status-grid">
+            <div class="status-item"><dt>控制权</dt><dd id="controlOwner">未接入</dd></div>
+            <div class="status-item"><dt>控制阶段</dt><dd id="controlPhase">—</dd></div>
+            <div class="status-item"><dt>操作页面</dt><dd id="controllerPage">—</dd></div>
+          </dl>
+        </section>
+        <section class="status-group">
+          <h3 class="status-group-title">服务与停车</h3>
+          <dl class="status-grid">
+            <div class="status-item"><dt>停车确认</dt><dd id="stationaryState">未确认</dd></div>
+            <div class="status-item"><dt>导航服务</dt><dd id="actionReady">未确认</dd></div>
+            <div class="status-item"><dt>清理模式</dt><dd id="cleaningMode">—</dd></div>
+            <div class="status-item wide"><dt>取消 / 停车阶段</dt><dd id="haltState">—</dd></div>
+          </dl>
+        </section>
+        <section class="status-group">
+          <h3 class="status-group-title">数据</h3>
+          <dl class="status-grid">
+            <div class="status-item"><dt>心跳序号</dt><dd id="statusSequence">—</dd></div>
+            <div class="status-item wide"><dt>数据更新时间</dt><dd id="statusTime">—</dd></div>
+            <div class="status-item wide"><dt>故障 / 告警</dt><dd id="missionAlarm">—</dd></div>
+          </dl>
+        </section>
+      </div>
+      <div class="task-actions"><button class="button subtle" id="pauseButton" disabled>暂停任务</button><button class="button subtle" id="resumeButton" disabled>恢复任务</button></div>
+      <p class="form-hint">暂停后保持暂停，需要显式恢复。HTTP 接收不代表停车完成。</p><div class="command-panel"><p id="commandFeedback" role="status">尚未发送操作</p><button class="text-button" id="resetButton" disabled>重置任务</button></div>
+    </section>
     <div class="bottom-grid">
-      <section class="card takeover-card"><div class="card-heading"><div><h2>手动接管</h2><p>导航取消并确认停车后，才开放手动控制。</p></div><button class="button subtle" id="requestManualButton" disabled>申请手动接管</button></div><div class="takeover-flow"><span><b>1</b>申请接管</span><i>→</i><span><b>2</b>取消导航</span><i>→</i><span><b>3</b>确认停车</span><i>→</i><span><b>4</b>进入手动控制</span></div><div class="takeover-note"><span id="takeoverStatus">实车接口只读，控制权未确认</span><button class="button stop-button" id="stopButton" disabled>停止并暂停任务</button></div><div class="manual-panel"><p>本地模拟方向控制 · 按住发送，松开停止 · <a href="index.html">打开手动与视频页 →</a></p><div class="manual-pad"><button class="button subtle" data-direction="forward" disabled>模拟前进</button><button class="button subtle" data-direction="left" disabled>模拟左转</button><button class="button subtle" data-direction="backward" disabled>模拟后退</button><button class="button subtle" data-direction="right" disabled>模拟右转</button></div><p id="manualIntentState">模拟意图：停止</p><button class="button subtle" id="releaseManualButton" disabled>结束手动接管</button></div><p class="form-hint">结束接管只归还控制权，不自动恢复导航。手动页共用连接设置与接管接口，切换后重新获取控制权。</p></section>
+      <section class="card takeover-card"><div class="card-heading"><div><h2>手动接管</h2><p>导航取消并确认停车后，才开放手动控制。</p></div><button class="button subtle" id="requestManualButton" disabled>申请手动接管</button></div><div class="takeover-flow"><span><b>1</b>申请接管</span><i>→</i><span><b>2</b>取消导航</span><i>→</i><span><b>3</b>确认停车</span><i>→</i><span><b>4</b>进入手动控制</span></div><div class="takeover-note"><span id="takeoverStatus">实车接口只读，控制权未确认</span></div><div class="manual-panel"><p>本地模拟方向控制 · 按住发送，松开停止 · <a href="index.html">打开手动与视频页 →</a></p><div class="manual-pad"><button class="button subtle" data-direction="forward" disabled>模拟前进</button><button class="button subtle" data-direction="left" disabled>模拟左转</button><button class="button subtle" data-direction="backward" disabled>模拟后退</button><button class="button subtle" data-direction="right" disabled>模拟右转</button></div><p id="manualIntentState">模拟意图：停止</p><button class="button subtle" id="releaseManualButton" disabled>结束手动接管</button></div><p class="form-hint">结束接管只归还控制权，不自动恢复导航。手动页共用连接设置与接管接口，切换后重新获取控制权。</p></section>
       <section class="card log-card"><div class="card-heading"><div><h2>操作记录</h2><p>配置、草稿与任务反馈</p></div><button class="text-button" id="clearLog" type="button">清空记录</button></div><ul id="operationLog" class="operation-log" aria-live="polite"></ul></section>
     </div>
     <footer>钉探 · 导航控制 <span>单点导航优先 · 多点巡航后续接入</span></footer>
   </main>
-  <script type="module" src="navigation.js"></script>
+  <script type="module" src="navigation.js?v=20261006-layout2"></script>
 </body>
 </html>
