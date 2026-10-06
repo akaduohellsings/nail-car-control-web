@@ -17,6 +17,15 @@ test('control contract requires explicitly local simulation, valid ownership and
   const data=status();change(data);assert.throws(()=>validateEnvelope(data));
  }
 });
+test('real pickup status retains navigation controls and blocks new goals while cleaning',()=>{
+ const d=status();d.capabilities={schema_version:1,environment:'robot_navigation',control_enabled:true,
+  commands:['start','pause','resume','reset','stop'],auto_pickup:{supported:true,cleaning_mode:'image_pickup'}};
+ d.mission.mode='nav2_with_image_pickup';d.mission.cleaning_mode='image_pickup';
+ validateEnvelope(d);assert.equal(controlPolicy(d,'A').start,true);
+ d.mission.state='CLEANING';d.mission.stationary_confirmed=false;
+ assert.equal(controlPolicy(d,'A').start,false);assert.equal(controlPolicy(d,'A').stop,true);
+ assert.equal(controlPolicy(d,'A').manualIntent,false);
+});
 test('HALTING, stale, unlocalized and other-page status cannot grant control',()=>{
  const d=status();assert.equal(controlPolicy(d,'A').start,true);
  d.control.localization_valid=false;assert.equal(controlPolicy(d,'A').start,false);d.control.localization_valid=true;

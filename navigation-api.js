@@ -15,8 +15,8 @@ export function validateEnvelope(data) {
   const s = data.mission;
   if (s !== null) {
     if (!s || Object.keys(s).length !== statusFields.length || statusFields.some(key => !(key in s))
-        || s.schema_version !== 1 || !['mock','nav2_with_mock_cleaning'].includes(s.mode)
-        || !states.includes(s.state) || s.cleaning_mode !== 'mock'
+        || s.schema_version !== 1 || !['mock','nav2_with_mock_cleaning','nav2_with_image_pickup'].includes(s.mode)
+        || !states.includes(s.state) || !['mock','image_pickup'].includes(s.cleaning_mode)
         || typeof s.source_instance_id !== 'string' || !s.source_instance_id
         || typeof s.observed_at_ros_ns !== 'string' || !/^\d+$/.test(s.observed_at_ros_ns)
         || ['sequence','attempt','max_attempts'].some(key => !Number.isSafeInteger(s[key]) || s[key] < 0)
@@ -45,7 +45,7 @@ export function validateEnvelope(data) {
   if (data.read_only === false) {
     const c = data.control, cap = data.capabilities;
     const simulation=cap?.environment==='local_simulation' && s?.mode==='mock';
-    const robot=cap?.environment==='robot_navigation' && s?.mode==='nav2_with_mock_cleaning'
+    const robot=cap?.environment==='robot_navigation' && ['nav2_with_mock_cleaning','nav2_with_image_pickup'].includes(s?.mode)
       && Array.isArray(cap.commands) && cap.commands.length===5
       && ['start','pause','resume','reset','stop'].every(command=>cap.commands.includes(command));
     if (!cap || cap.schema_version !== 1 || (!simulation&&!robot) || cap.control_enabled !== true
@@ -76,7 +76,7 @@ export function controlPolicy(data, sessionId, locallyAllowed = true) {
   const available=locallyAllowed && data?.connection==='ONLINE' && data?.read_only===false
     && data.capabilities?.control_enabled===true
     && ((data.capabilities.environment==='local_simulation'&&s?.mode==='mock')
-      || (data.capabilities.environment==='robot_navigation'&&s?.mode==='nav2_with_mock_cleaning'));
+      || (data.capabilities.environment==='robot_navigation'&&['nav2_with_mock_cleaning','nav2_with_image_pickup'].includes(s?.mode)));
   const simulation=data?.capabilities?.environment==='local_simulation';
   const own=c?.controller_id===sessionId, free=c?.controller_id===null, ready=available && (own||free);
   const busy=c?.command_result?.status==='pending', halting=c?.phase==='HALTING', manual=ready&&own&&c.owner==='manual';

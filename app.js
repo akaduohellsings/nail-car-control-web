@@ -1,7 +1,7 @@
 import {createVideoMonitor, createEventMonitor} from './service-monitor.js';
 import {loadConfig} from './connection-config.js';
 import {installSettings} from './connection-settings.js';
-import {createNavigationApi, controlPolicy} from './navigation-api.js';
+import {createNavigationApi, controlPolicy} from './navigation-api.js?v=20261006-real-pickup';
 import {stateLabels, connectionLabels} from './task-labels.js';
 import {bindManualInput} from './manual-input.js';
 
@@ -37,7 +37,7 @@ function status(text,level='yellow'){
 function policy(){return controlPolicy(task,api.sessionId,api.controlAvailable);}
 function navigationBlocksStandalone(){
   return task?.connection==='ONLINE' && task.mission &&
-    (task.mission.mode==='nav2_with_mock_cleaning' || task.mission.state!=='IDLE' ||
+    (['nav2_with_mock_cleaning','nav2_with_image_pickup'].includes(task.mission.mode) || task.mission.state!=='IDLE' ||
       task.control?.owner==='automatic' || task.control?.owner==='manual' || task.control?.owner==='blocked');
 }
 function canMove(direction){
