@@ -68,6 +68,8 @@ function renderSpeeds(){
 }
 function updateControls(){
   renderSpeeds();
+  $('autoPickup').disabled=currentStatus?.connection!=='ONLINE'||currentStatus?.capabilities?.auto_pickup?.supported!==true
+    || !['IDLE','PAUSED','FAULT'].includes(currentStatus?.mission?.state)||!!pendingUi;
   const p=controlPolicy(currentStatus,api.sessionId,api.controlAvailable);
   for(const action of ['start','pause','resume','reset','requestManual','releaseManual','stop']){
     $(action+'Button').disabled=!p[action] || (action!=='stop'&&!!pendingUi) || (action==='start'&&(!validInputs()||!validSpeeds()||!currentStatus?.capabilities?.speed_limits));
@@ -142,11 +144,15 @@ function renderStatus(data) {
   if(pendingUi&&c?.command_result?.request_id===pendingUi.request_id&&c.command_result.bridge_instance_id===pendingUi.bridge){
     showResult(c.command_result);
   }
+  const decisionEnabled=online&&data.decision?.auto_pickup_enabled===true;
+  $('decisionStatus').textContent=decisionEnabled?'本次已启用：检测 → 停车 → 模拟拾取 → 恢复原目标；收集未确认。'
+    :data.capabilities?.auto_pickup?.supported===true?'下一次开始导航可启用检测决策；本轮拾取与复查均为模拟。':'当前服务未开放检测决策；本轮不执行真实拾取。';
   $('missionMode').textContent = s ? (s.mode === 'mock' ? '模拟' : '真实导航 / 模拟清理') : '—';
-  if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent='真实单点导航';
+  if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent=decisionEnabled?'真实导航 / 模拟拾取':'真实单点导航';
   if(data.capabilities?.preview)$('missionMode').textContent='导航接口预览（模拟）';
   const arrived=s?.state==='IDLE'&&s.saved_goal&&s.halt_state==='NONE'&&s.owned_goal_id===null&&s.goal_response_pending===false&&s.stationary_confirmed===true;
-  $('missionState').textContent = s ? ((arrived?'已到达':stateLabels[s.state]) + (online ? '' : '（最后状态）')) : '—';
+  const decisionPhase=decisionEnabled?{CLEANING:'模拟拾取中',VERIFYING:'模拟复查中'}[s?.state]:null;
+  $('missionState').textContent = s ? ((arrived?'已到达':decisionPhase||stateLabels[s.state]) + (online ? '' : '（最后状态）')) : '—';
   $('missionGoal').textContent = s?.saved_goal ? `(${s.saved_goal.x}, ${s.saved_goal.y}) 米 · ${s.saved_goal.yaw_deg}°` : '—';
   $('stationaryState').textContent = !online ? '未确认（数据不可用）' :
     (s.stationary_confirmed === null ? '未提供（模拟）' : s.stationary_confirmed ? '已确认' : '未确认');
@@ -218,6 +224,7 @@ $('startButton').addEventListener('click',()=>{
   if(!validInputs()||!validSpeeds())return;
   void submitOperation('start',{map_id:currentStatus?.control?.map_id,
     speed_limits:speedInputs(),
+    ...(currentStatus?.capabilities?.auto_pickup?.supported===true?{auto_pickup:$('autoPickup').checked}:{}),
     goal:parseGoal({x:$('goalX').valueAsNumber,y:$('goalY').valueAsNumber,yaw_deg:$('goalYaw').valueAsNumber})});
 });
 for(const name of ['pause','resume','reset','requestManual','releaseManual','stop']){

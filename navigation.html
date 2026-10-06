@@ -38,6 +38,8 @@
           <p class="form-hint" id="appliedSpeed" role="status">本次生效速度：尚未下发</p>
           <p class="form-hint">坐标需要对应已确认的地图。保存草稿不会发送导航目标。</p>
           <div class="draft-actions"><button class="button subtle" type="submit">保存目标草稿</button><button class="button stop-button" id="stopButton" type="button" disabled>停止并暂停任务</button><button class="text-button" id="clearDraft" type="button">清空</button></div>
+          <p><label><input id="autoPickup" type="checkbox" disabled> 导航时检测钉子并暂停处理（模拟拾取）</label></p>
+          <p class="form-hint" id="decisionStatus" role="status">连接支持检测决策的服务后可启用；本轮不执行真实拾取。</p>
           <p id="draftStatus" class="draft-status" role="status">尚未保存目标草稿</p>
           <button class="button primary full" id="startButton" type="button" disabled>开始导航 <span>等待服务就绪</span></button>
         </form>
