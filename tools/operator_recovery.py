@@ -19,7 +19,33 @@ class OperatorRecovery:
 
     def snapshot(self):
         with self.lock:
-            return dict(self.state,host=self.config()['host'])
+            state=dict(self.state)
+        config=self.config()
+        # The command-line launcher can supersede this process's old attempt.
+        # A running worker still owns startup validation; don't finish it early.
+        if state['status']!='starting':
+            online=self.online_status(config)
+            if online is not None:
+                ready=(online.get('read_only') is False
+                       and online.get('control',{}).get('phase')=='READY'
+                       and online.get('control',{}).get('localization_valid') is True
+                       and online.get('mission',{}).get('stationary_confirmed') is True
+                       and online.get('mission',{}).get('action_server_ready') is True)
+                state={'status':'ready' if ready else 'online',
+                       'message':'导航服务已就绪，请连接任务服务。' if ready else
+                                 '导航服务在线，请查看任务状态；人工复位前先结束整套服务。'}
+            elif state['status']=='ready':
+                state={'status':'offline','message':'导航服务当前不可达，请检查连接及服务状态。'}
+        return dict(state,host=config['host'])
+
+    def online_status(self,config):
+        try:
+            opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open('http://'+config['host']+':'+str(config.get('navigation_port',8092))+'/api/v1/status',timeout=2) as response:
+                status=json.load(response)
+            return status if isinstance(status,dict) and status.get('connection')=='ONLINE' else None
+        except (OSError,ValueError):
+            return None
 
     def start(self, data):
         if data.get('confirmed_origin') is not True:

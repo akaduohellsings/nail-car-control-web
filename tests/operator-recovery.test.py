@@ -22,6 +22,9 @@ class RecoveryTests(unittest.TestCase):
         (self.root/'config/web_navigation_operator.json').write_text(json.dumps({'host':'192.168.137.2'}))
         (self.root/'tools/web_navigation_operator.py').touch()
         self.recovery=OperatorRecovery(self.root)
+        self.probe=patch.object(self.recovery,'online_status',return_value=None)
+        self.probe_mock=self.probe.start()
+        self.addCleanup(self.probe.stop)
     def tearDown(self):self.temp.cleanup()
 
     def test_requires_explicit_origin_and_matching_host(self):
@@ -49,7 +52,34 @@ class RecoveryTests(unittest.TestCase):
             self.recovery.run()
         command=run.call_args.args[0]
         self.assertEqual(command[-3:],['start','--origin-confirmed','--no-browser'])
-        self.assertEqual(self.recovery.snapshot()['status'],'ready')
+        self.assertEqual(self.recovery.state['status'],'ready')
+
+    def test_live_service_supersedes_old_failure_without_starting_anything(self):
+        self.recovery.state={'status':'failed','message':'old failed report'}
+        self.probe_mock.return_value={'connection':'ONLINE','read_only':False,
+            'control':{'phase':'READY','localization_valid':True},
+            'mission':{'stationary_confirmed':True,'action_server_ready':True}}
+        with patch('operator_recovery.subprocess.run') as run:
+            self.assertEqual(self.recovery.snapshot()['status'],'ready')
+            run.assert_not_called()
+        self.assertEqual(self.recovery.state['message'],'old failed report')
+        self.probe_mock.return_value['control']['phase']='NAVIGATING'
+        self.assertEqual(self.recovery.snapshot()['status'],'online')
+
+    def test_offline_does_not_keep_previous_ready_and_starting_is_not_overridden(self):
+        self.recovery.state={'status':'ready','message':'old ready'}
+        self.assertEqual(self.recovery.snapshot()['status'],'offline')
+        self.recovery.state={'status':'starting','message':'validating'}
+        self.probe_mock.reset_mock()
+        self.assertEqual(self.recovery.snapshot()['status'],'starting')
+        self.probe_mock.assert_not_called()
+
+    def test_probe_rejects_invalid_or_offline_responses(self):
+        self.probe.stop()
+        for body in (b'{',b'[]',b'{"connection":"OFFLINE"}'):
+            opener=MagicMock();opener.open.return_value.__enter__.return_value=io.BytesIO(body)
+            with patch('operator_recovery.urllib.request.build_opener',return_value=opener):
+                self.assertIsNone(self.recovery.online_status({'host':'192.168.137.2'}))
 
     def test_http_requires_same_origin_and_host(self):
         server=ThreadingHTTPServer(('127.0.0.1',0),make_handler(0,recovery=self.recovery))
