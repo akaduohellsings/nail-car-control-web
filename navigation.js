@@ -250,12 +250,15 @@ for(const button of document.querySelectorAll('[data-direction]')){
   button.addEventListener('keydown',event=>{if([' ','Enter'].includes(event.key)&&!event.repeat){event.preventDefault();beginManual(button.dataset.direction);}});
   button.addEventListener('keyup',event=>{if([' ','Enter'].includes(event.key)){event.preventDefault();stopManual();}});
 }
-function abandonControl(){
+function abandonControl(reason){
   stopManual(false);
-  if(currentStatus?.control?.controller_id===api.sessionId)void api.stop().catch(()=>{});
+  if(currentStatus?.control?.controller_id===api.sessionId){
+    log(reason+'，自动请求停止任务');
+    void api.stop().catch(()=>{});
+  }
 }
-window.addEventListener('blur',abandonControl);
-document.addEventListener('visibilitychange',()=>{if(document.hidden)abandonControl();});
+window.addEventListener('blur',()=>abandonControl('导航页面失去焦点'));
+document.addEventListener('visibilitychange',()=>{if(document.hidden)abandonControl('导航页面进入后台');});
 try {
   const saved = read(KEYS.goal);
   if (saved) {
