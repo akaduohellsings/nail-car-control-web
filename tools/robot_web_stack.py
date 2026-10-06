@@ -30,8 +30,53 @@ try:
     print('CAMERA_READY',flush=True)
 finally: node.destroy_node(); rclpy.shutdown()
 '''
-VISION = CAMERA.replace('web_stack_camera_ready', 'web_stack_yolo_ready').replace(
-    "'/camera/color/image_raw'", "'/detected_image'").replace('CAMERA_READY', 'YOLO_READY')
+class VisionReadiness:
+    """Legacy annotated images lack headers; fresh detections prove inference freshness."""
+    def __init__(self):
+        self.counts = dict(camera=0, annotated=0, detections=0)
+        self.last_stamp = {}
+        self.last_received = {}
+
+    def observe(self, kind, stamp, now, valid=True):
+        if not valid:
+            return
+        if kind!='annotated' or stamp!=0:
+            if not 0<=now-stamp<3 or stamp<=self.last_stamp.get(kind,-1):
+                return
+            self.last_stamp[kind]=stamp
+        self.counts[kind]+=1
+        self.last_received[kind]=now
+
+    def ready(self, now):
+        return all(self.counts[k]>=3 and 0<=now-self.last_received.get(k,-1)<3
+                   for k in self.counts)
+
+
+VISION = r'''
+import time, rclpy
+from sensor_msgs.msg import Image
+from vision_msgs.msg import Detection2DArray
+from rclpy.qos import qos_profile_sensor_data
+from robot_web_stack import VisionReadiness
+rclpy.init(); node=rclpy.create_node('web_stack_yolo_ready'); readiness=VisionReadiness()
+def receive(kind,msg):
+    stamp=msg.header.stamp.sec+msg.header.stamp.nanosec/1e9
+    valid=kind=='detections' or (msg.width>0 and msg.height>0 and bool(msg.data))
+    readiness.observe(kind,stamp,time.time(),valid)
+subscriptions=[
+    node.create_subscription(Image,'/camera/color/image_raw',lambda m:receive('camera',m),qos_profile_sensor_data),
+    node.create_subscription(Image,'/detected_image',lambda m:receive('annotated',m),qos_profile_sensor_data),
+    node.create_subscription(Detection2DArray,'/detections',lambda m:receive('detections',m),10)]
+end=time.monotonic()+45
+try:
+    while not readiness.ready(time.time()) and time.monotonic()<end:
+        rclpy.spin_once(node,timeout_sec=.2)
+    if not readiness.ready(time.time()):
+        raise RuntimeError('YOLO output not ready: '+str(readiness.counts))
+    print('YOLO_READY '+str(readiness.counts),flush=True)
+finally: node.destroy_node(); rclpy.shutdown()
+'''
+
 
 
 def active_processes():
@@ -82,7 +127,7 @@ def main():
 
     def gate(name, code):
         process = launch(name, 'exec /usr/bin/python3 -c ' + shlex.quote(code))
-        if process.wait(timeout=45) != 0:
+        if process.wait(timeout=60) != 0:
             raise RuntimeError(name + ' failed; see ' + str(folder / (name + '.log')))
 
     exit_code = 0
