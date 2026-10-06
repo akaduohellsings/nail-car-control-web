@@ -26,6 +26,20 @@ test('real pickup status retains navigation controls and blocks new goals while 
  assert.equal(controlPolicy(d,'A').start,false);assert.equal(controlPolicy(d,'A').stop,true);
  assert.equal(controlPolicy(d,'A').manualIntent,false);
 });
+test('real action demo retains stop and manual takeover while blocking new navigation during motion',()=>{
+ const d=status();d.capabilities={schema_version:1,environment:'robot_navigation',control_enabled:true,
+  commands:['start','pause','resume','reset','stop','request_manual','release_manual','manual_intent'],
+  auto_pickup:{supported:true,cleaning_mode:'motion_demo'},manual_control:{supported:true,
+   directions:['stop','forward','backward','left','right'],speed_limits:{linear_max_m_s:.3,angular_max_rad_s:Math.PI/4,
+    defaults:{linear_m_s:.05,angular_rad_s:.24}}}};
+ d.mission.mode='nav2_with_motion_demo';d.mission.cleaning_mode='motion_demo';
+ validateEnvelope(d);assert.equal(controlPolicy(d,'A').start,true);
+ d.control.owner='automatic';d.control.controller_id='A';d.mission.state='CLEANING';d.mission.stationary_confirmed=false;
+ assert.equal(controlPolicy(d,'A').start,false);assert.equal(controlPolicy(d,'A').stop,true);
+ assert.equal(controlPolicy(d,'A').requestManual,true);assert.equal(controlPolicy(d,'A').manualIntent,false);
+ d.connection='STALE';assert.equal(controlPolicy(d,'A').requestManual,false);
+});
+
 test('HALTING, stale, unlocalized and other-page status cannot grant control',()=>{
  const d=status();assert.equal(controlPolicy(d,'A').start,true);
  d.control.localization_valid=false;assert.equal(controlPolicy(d,'A').start,false);d.control.localization_valid=true;

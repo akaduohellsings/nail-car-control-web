@@ -1,7 +1,7 @@
 import {stateLabels, connectionLabels} from './task-labels.js';
 import {loadConfig} from './connection-config.js?v=20261006-video-network';
 import {installSettings} from './connection-settings.js?v=20261006-manual';
-import { createNavigationApi, controlPolicy } from './navigation-api.js?v=20261006-manual';
+import { createNavigationApi, controlPolicy } from './navigation-api.js?v=20261006-action-demo';
 import {createMapView} from './navigation-map.js?v=20261006-waypoints';
 import {MAX_WAYPOINTS,parseRouteDraft,routeStartPayload,routeActive,routeProgress} from './navigation-route.js';
 import {parseSpeedInputs,parseSpeedDraft,speedText} from './navigation-speed.js';
@@ -143,7 +143,7 @@ function renderStatus(data) {
   $('connectionText').textContent = connectionLabels[data.connection] || '状态未知';
   document.querySelector('.connection i').style.background = online ? '#6cbd9c' : '#d5ad62';
   $('taskBadge').textContent = online ? '实时' : (data.connection === 'STALE' ? '已过期' : '未确认');
-  $('modeNotice').textContent = s ? (s.mode === 'mock' ? '模拟任务 · 只读' : s.cleaning_mode==='image_pickup'?'真实导航与拾取 · 按勾选开关启用':'真实导航适配 · 清理模拟') : '只读状态';
+  $('modeNotice').textContent = s ? (s.mode === 'mock' ? '模拟任务 · 只读' : s.cleaning_mode==='motion_demo'?'导航与识别动作测试 · 按勾选开关启用':s.cleaning_mode==='image_pickup'?'真实导航与拾取 · 按勾选开关启用':'真实导航适配 · 清理模拟') : '只读状态';
   const c=data.control;
   if(online&&(!data.navigation?.map_id||data.navigation.map_id==='waiting-for-map')){
     loadedMapId=null;mapView.clear();
@@ -174,20 +174,27 @@ function renderStatus(data) {
     ?(data.capabilities?.continuous_testing?(data.capabilities?.retry_after_navigation_abort?'真实单点导航 · 连续测试：到达或普通导航失败并确认停车后，可选下一点开始':'真实单点导航 · 连续测试：到达后可直接选下一点，失败后停止并重置'):'真实单点导航 · 拾取未启用'):'本地模拟 · 所有移动与停车均模拟';
   if(data.capabilities?.waypoints?.supported&&data.read_only===false&&!data.capabilities.preview)$('modeNotice').textContent=data.capabilities.environment==='robot_navigation'
     ?'真实导航 · 支持多点顺序执行；故障中断队列，暂停后需明确恢复':'本地模拟 · 支持多点队列，移动与停车均模拟';
+  if(data.capabilities?.preview)$('modeNotice').textContent='接口预览 · 所有位置与动作反馈均模拟';
   $('controlOwner').textContent=online&&c?ownerNames[c.owner]:'未确认';
   $('controlPhase').textContent=online&&c?phaseNames[c.phase]:'—';
   $('controllerPage').textContent=online&&c?(c.controller_id===null?'未占用':c.controller_id===api.sessionId?'本页':'其他页面'):'—';
   $('takeoverStatus').textContent=online&&c?phaseNames[c.phase]:'实车接口只读，控制权未确认';
   const directions={stop:'停止',forward:'前进',backward:'后退',left:'左转',right:'右转'};
-  $('manualIntentState').textContent=data.capabilities?.environment==='robot_navigation'
-    ?'本轮只开放导航，手动接管尚未启用':'模拟意图：'+(online&&c?directions[c.manual_direction]:'未确认');
+  const realManual=data.capabilities?.environment==='robot_navigation'&&!data.capabilities?.preview;
+  document.querySelector('.manual-panel>p').firstChild.textContent=(realManual?'手动方向控制':'本地模拟方向控制')+' · 按住发送，松开停止 · ';
+  for(const button of document.querySelectorAll('[data-direction]'))button.textContent=(realManual?'':'模拟')+directions[button.dataset.direction];
+  $('manualIntentState').textContent=realManual&&data.capabilities?.manual_control?.supported!==true
+    ?'当前服务未开放手动接管':(realManual?'请求方向：':'模拟意图：')+(online&&c?directions[c.manual_direction]||'其他方向':'未确认');
   if(pendingUi&&c?.command_result?.request_id===pendingUi.request_id&&c.command_result.bridge_instance_id===pendingUi.bridge){
     showResult(c.command_result);
   }
   const decisionEnabled=online&&data.decision?.auto_pickup_enabled===true;
   const realPickup=data.capabilities?.auto_pickup?.cleaning_mode==='image_pickup';
-  $('autoPickupLabel').textContent=realPickup?'导航时检测钉子并执行真实拾取（车头磁铁 · 28 cm）':'导航时检测钉子并暂停处理（模拟拾取）';
-  $('decisionStatus').textContent=realPickup
+  const actionDemo=data.capabilities?.auto_pickup?.cleaning_mode==='motion_demo';
+  $('autoPickupLabel').textContent=actionDemo?'导航时识别钉子并测试动作（前进 10 cm → 后退 10 cm）':realPickup?'导航时检测钉子并执行真实拾取（车头磁铁 · 28 cm）':'导航时检测钉子并暂停处理（模拟拾取）';
+  $('decisionStatus').textContent=actionDemo
+    ?(decisionEnabled?'本次已启用：识别 → 停车 → 前进 10 cm → 停车 → 后退 10 cm → 停车 → 恢复原目标。':'勾选后，下一次导航会在识别钉子后测试前进、后退动作。')+' 动作速度 0.04 米/秒；仅验证流程，收集未确认。'
+    :realPickup
     ?(decisionEnabled?'本次已启用：检测 → 停车 → 对准接近 → 前进 28 cm → 停车 → 恢复原目标。':'勾选后，下一次导航会触发真实拾取动作。')+' 拾取速度上限 0.04 m/s；实际吸附需现场确认。'
     :decisionEnabled?'本次已启用：检测 → 停车 → 模拟拾取 → 恢复原目标；收集未确认。'
     :data.capabilities?.auto_pickup?.supported===true?'下一次开始导航可启用检测决策；本轮拾取与复查均为模拟。':'当前服务未开放检测决策；本轮不执行真实拾取。';
@@ -210,10 +217,17 @@ function renderStatus(data) {
     $('decisionStatus').textContent+=` 拾取阶段：${stage}；已完成动作 ${p.action_count} 次。`+(p.error?` 原因：${p.error}。`:'');
   }
   $('missionMode').textContent = s ? (s.mode === 'mock' ? '模拟' : '真实导航 / 模拟清理') : '—';
-  if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent=decisionEnabled?(realPickup?'真实导航 / 真实拾取':'真实导航 / 模拟拾取'):(c?.route?'真实多点导航':'真实单点导航');
+  if(actionDemo&&data.decision?.action_demo){
+    const d=data.decision.action_demo;
+    const phases={IDLE:'待命',FORWARD:'前进中',WAIT_FORWARD_STOP:'前进后确认停车',BACKWARD:'后退中',WAIT_BACKWARD_STOP:'后退后确认停车',COMPLETE:'动作已完成',CANCELED:'动作已取消',FAULT:'动作故障'};
+    $('decisionStatus').textContent+=` 动作阶段：${phases[d.phase]||'等待动作反馈'}；已完成 ${d.action_count} 次。`
+      +(Number.isFinite(d.forward_m)&&Number.isFinite(d.reverse_m)?` 前进 ${(d.forward_m*100).toFixed(1)} cm，后退 ${(d.reverse_m*100).toFixed(1)} cm。`:'')
+      +(d.error?` 原因：${d.error}。`:'');
+  }
+  if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent=decisionEnabled?(actionDemo?'真实导航 / 识别动作测试':realPickup?'真实导航 / 真实拾取':'真实导航 / 模拟拾取'):(c?.route?'真实多点导航':'真实单点导航');
   if(data.capabilities?.preview)$('missionMode').textContent='导航接口预览（模拟）';
   const arrived=s?.state==='IDLE'&&s.saved_goal&&s.halt_state==='NONE'&&s.owned_goal_id===null&&s.goal_response_pending===false&&s.stationary_confirmed===true;
-  const decisionPhase=decisionEnabled?(realPickup?{CLEANING:'真实拾取中',VERIFYING:'核对动作与停车'}:{CLEANING:'模拟拾取中',VERIFYING:'模拟复查中'})[s?.state]:null;
+  const decisionPhase=decisionEnabled?(actionDemo?{CLEANING:'识别动作测试中',VERIFYING:'确认动作与停车'}:realPickup?{CLEANING:'真实拾取中',VERIFYING:'核对动作与停车'}:{CLEANING:'模拟拾取中',VERIFYING:'模拟复查中'})[s?.state]:null;
   $('missionState').textContent = s ? ((arrived?'已到达':decisionPhase||stateLabels[s.state]) + (online ? '' : '（最后状态）')) : '—';
   if(c?.route?.state==='WAITING_STOP')$('missionState').textContent='点位已到达，等待停车确认';
   if(c?.route?.state==='PAUSED')$('missionState').textContent='多点任务已暂停';
@@ -226,7 +240,7 @@ function renderStatus(data) {
   const haltLabels = {NONE:'未请求停车',CANCELING:'取消中',VERIFYING_STOP:'核实停车中',CONFIRMED:'已确认',UNCONFIRMED:'未确认'};
   $('haltState').textContent = online && s?.halt_state ? (haltLabels[s.halt_state] || s.halt_state) : '—';
   $('cleaningMode').textContent = s ? '模拟' : '—';
-  if(data.capabilities?.environment==='robot_navigation')$('cleaningMode').textContent=decisionEnabled?(realPickup?'真实动作，吸附未确认':'模拟拾取'):'未启用';
+  if(data.capabilities?.environment==='robot_navigation')$('cleaningMode').textContent=decisionEnabled?(actionDemo?'前进 / 后退动作测试':realPickup?'真实动作，吸附未确认':'模拟拾取'):'未启用';
   $('attemptState').textContent = s ? `${s.attempt} / ${s.max_attempts}` : '—';
   $('missionAlarm').textContent = s ? (s.alarm || '无') : '—';
   $('missionAlarm').style.color = s?.alarm ? '#e98a91' : '';
@@ -235,7 +249,7 @@ function renderStatus(data) {
   catch { $('statusTime').textContent = '时间格式异常'; }
   const feedback = [data.connection,s?.source_instance_id,s?.state,s?.alarm,!!arrived].join('|');
   if (feedback !== lastFeedback) {
-    log(`${connectionLabels[data.connection] || '状态未知'}${s ? '：'+(s.mode==='mock'?'模拟':'真实适配')+' · '+(arrived?'已到达':stateLabels[s.state]) : ''}${data.error ? '。'+data.error : ''}`,
+    log(`${connectionLabels[data.connection] || '状态未知'}${s ? '：'+(data.capabilities?.preview||s.mode==='mock'?'模拟':'真实适配')+' · '+(arrived?'已到达':decisionPhase||stateLabels[s.state]) : ''}${data.error ? '。'+data.error : ''}`,
       ['UNREACHABLE','INVALID','CONFLICT'].includes(data.connection));
     lastFeedback = feedback;
   }
@@ -330,7 +344,7 @@ function beginManual(direction){
     if(manualHold!==hold||selectedApi!==api)return;
     try{
       const result=await selectedApi.manualIntent({direction});
-      if(result.status!=='succeeded')throw new Error(result.reason||'模拟方向请求失败');
+      if(result.status!=='succeeded')throw new Error(result.reason||'方向请求失败');
       if(manualHold===hold)manualTimer=setTimeout(repeat,150);
     }catch(error){stopManual(false);log(error.message,true);void selectedApi.stop().catch(()=>{});}
   };
