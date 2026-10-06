@@ -301,3 +301,51 @@ installSettings($('settingsButton'), config => {
 });
 $('clearLog').addEventListener('click', () => { $('operationLog').replaceChildren(); log('本地操作记录已清空。'); });
 log('导航页面已加载。连接任务服务后，根据导航就绪与停车状态开放操作。');
+
+
+let recoveryBusy=false;
+async function recoveryRequest(path,payload){
+  const response=await fetch(path,{method:payload?'POST':'GET',cache:'no-store',
+    headers:payload?{'Content-Type':'application/json'}:undefined,body:payload?JSON.stringify(payload):undefined,
+    signal:AbortSignal.timeout(5000)});
+  const result=await response.json();
+  if(!response.ok)throw new Error(result.error||'本地启动服务不可用');
+  return result;
+}
+async function pollRecovery(){
+  try{
+    const result=await recoveryRequest('/api/operator/status');
+    $('restartServiceStatus').textContent=result.message;
+    recoveryBusy=result.status==='starting';
+    $('restartServiceButton').disabled=recoveryBusy;
+    if(recoveryBusy)setTimeout(pollRecovery,2000);
+    else if(result.status==='ready'){
+      log('后台服务已重新启动，等待你选点。');
+      await api.connect();
+    }else if(result.status==='failed')log(result.message,true);
+  }catch(error){recoveryBusy=false;$('restartServiceButton').disabled=false;$('restartServiceStatus').textContent=error.message;}
+}
+$('restartServiceButton').addEventListener('click',()=>{
+  if(currentStatus?.connection==='ONLINE'){
+    log('导航服务仍在线，可使用重置任务；人工复位前请先结束整套服务。',true);return;
+  }
+  $('restartOriginConfirmed').checked=false;$('restartServiceDialog').showModal();
+});
+$('confirmRestartService').addEventListener('click',async()=>{
+  if(!$('restartOriginConfirmed').checked){$('restartOriginConfirmed').reportValidity();log('请先完成复位并勾选确认。',true);return;}
+  if(recoveryBusy)return;
+  try{
+    recoveryBusy=true;$('confirmRestartService').disabled=true;
+    const config=loadConfig();
+    const result=await recoveryRequest('/api/operator/restart',{confirmed_origin:true,expected_host:new URL(config.navigationUrl).hostname});
+    $('restartServiceDialog').close();$('restartServiceStatus').textContent=result.message;
+    log(result.message);await pollRecovery();
+  }catch(error){recoveryBusy=false;log(error.message,true);$('restartServiceStatus').textContent=error.message;}
+  finally{$('confirmRestartService').disabled=false;}
+});
+if(!new URLSearchParams(location.search).has('simulation')&&['localhost','127.0.0.1'].includes(location.hostname)){
+  recoveryRequest('/api/operator/status').then(result=>{
+    $('restartServiceStatus').textContent=result.message;$('restartServiceButton').disabled=result.status==='starting';
+    if(result.status==='starting')void pollRecovery();
+  }).catch(()=>{$('restartServiceStatus').textContent='本地启动入口未加载，请重新启动电脑网页服务。';});
+}

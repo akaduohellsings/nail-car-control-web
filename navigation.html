@@ -83,6 +83,13 @@
       </div>
       <div class="task-actions"><button class="button subtle" id="pauseButton" disabled>暂停任务</button><button class="button subtle" id="resumeButton" disabled>恢复任务</button></div>
       <p class="form-hint">暂停后保持暂停，需要显式恢复。HTTP 接收不代表停车完成。</p><div class="command-panel"><p id="commandFeedback" role="status">尚未发送操作</p><button class="text-button" id="resetButton" disabled>重置任务</button></div>
+      <div class="task-actions"><button class="button subtle" id="restartServiceButton" disabled>重启导航服务</button></div>
+      <p class="form-hint" id="restartServiceStatus" role="status">服务退出后，可从电脑本地网页重新启动。</p>
+      <dialog id="restartServiceDialog"><form method="dialog"><h2>重启导航服务</h2>
+        <p>先结束旧服务，再将小车放回建图起点、保持原朝向。启动会重新初始化定位，不会发送行驶目标。</p>
+        <p><label><input type="checkbox" id="restartOriginConfirmed" required> 小车已在起点、朝向一致且停稳，我在车旁，测试区域和线缆有余量。</label></p>
+        <div class="task-actions"><button class="button subtle" value="cancel" formnovalidate>取消</button><button class="button" id="confirmRestartService" type="button">确认复位并启动</button></div>
+      </form></dialog>
     </section>
     <div class="bottom-grid">
       <section class="card takeover-card"><div class="card-heading"><div><h2>手动接管</h2><p>导航取消并确认停车后，才开放手动控制。</p></div><button class="button subtle" id="requestManualButton" disabled>申请手动接管</button></div><div class="takeover-flow"><span><b>1</b>申请接管</span><i>→</i><span><b>2</b>取消导航</span><i>→</i><span><b>3</b>确认停车</span><i>→</i><span><b>4</b>进入手动控制</span></div><div class="takeover-note"><span id="takeoverStatus">实车接口只读，控制权未确认</span></div><div class="manual-panel"><p>本地模拟方向控制 · 按住发送，松开停止 · <a href="index.html">打开手动与视频页 →</a></p><div class="manual-pad"><button class="button subtle" data-direction="forward" disabled>模拟前进</button><button class="button subtle" data-direction="left" disabled>模拟左转</button><button class="button subtle" data-direction="backward" disabled>模拟后退</button><button class="button subtle" data-direction="right" disabled>模拟右转</button></div><p id="manualIntentState">模拟意图：停止</p><button class="button subtle" id="releaseManualButton" disabled>结束手动接管</button></div><p class="form-hint">结束接管只归还控制权，不自动恢复导航。手动页共用连接设置与接管接口，切换后重新获取控制权。</p></section>

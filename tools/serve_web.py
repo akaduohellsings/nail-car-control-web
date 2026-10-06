@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def make_handler(port, runtime=None):
+def make_handler(port, runtime=None, recovery=None):
     origins = {f'http://127.0.0.1:{port}', f'http://localhost:{port}'}
 
     class Handler(SimpleHTTPRequestHandler):
@@ -29,7 +29,9 @@ def make_handler(port, runtime=None):
 
         def do_GET(self):
             path = self.path.split('?', 1)[0]
-            if runtime is not None and path == '/api/v1/status':
+            if recovery is not None and path == '/api/operator/status':
+                self.respond(200,recovery.snapshot())
+            elif runtime is not None and path == '/api/v1/status':
                 self.respond(200, runtime.snapshot())
             elif runtime is not None and path == '/events':
                 self.respond(200, {'detected': False, 'count': 0, 'message': '本地模拟：未注入钉子',
@@ -38,6 +40,21 @@ def make_handler(port, runtime=None):
                 super().do_GET()
 
         def do_POST(self):
+            if recovery is not None and self.path=='/api/operator/restart':
+                if (self.client_address[0] not in ('127.0.0.1','::1')
+                        or self.headers.get('Origin') not in origins
+                        or 'http://'+self.headers.get('Host','') not in origins):
+                    self.respond(403,{'error':'只允许电脑本地网页操作。'});return
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 0<length<=2048 or self.headers.get('Content-Type','').split(';')[0]!='application/json':
+                        raise ValueError('请求格式错误。')
+                    data=json.loads(self.rfile.read(length))
+                    if not isinstance(data,dict):raise ValueError('请求格式错误。')
+                    self.respond(202,recovery.start(data))
+                except (ValueError,TypeError,KeyError) as error:
+                    self.respond(400,{'error':str(error)})
+                return
             if runtime is None:
                 self.respond(405, {'error': 'static_website_only'})
                 return
@@ -77,6 +94,7 @@ def main():
     parser.add_argument('--port', type=int, default=8000)
     parser.add_argument('--open', action='store_true')
     parser.add_argument('--simulate', action='store_true')
+    parser.add_argument('--operator-project',type=Path,default=ROOT.parent/'小车')
     parser.add_argument('--simulation-project', type=Path, default=ROOT.parent / '小车')
     args = parser.parse_args()
     runtime = None
@@ -96,7 +114,9 @@ def main():
                 runtime.step(time.monotonic())
         worker = threading.Thread(target=tick, daemon=True)
     try:
-        server = ThreadingHTTPServer(('127.0.0.1', args.port), make_handler(args.port, runtime))
+        from operator_recovery import OperatorRecovery
+        recovery=OperatorRecovery(args.operator_project) if not args.simulate and (args.operator_project/'tools/web_navigation_operator.py').is_file() else None
+        server = ThreadingHTTPServer(('127.0.0.1', args.port), make_handler(args.port, runtime,recovery))
     except OSError as error:
         parser.error(f'Cannot open port {args.port}: {error}. Close the old web server or use --port.')
     if worker:
