@@ -147,6 +147,16 @@ function renderStatus(data) {
   const decisionEnabled=online&&data.decision?.auto_pickup_enabled===true;
   $('decisionStatus').textContent=decisionEnabled?'本次已启用：检测 → 停车 → 模拟拾取 → 恢复原目标；收集未确认。'
     :data.capabilities?.auto_pickup?.supported===true?'下一次开始导航可启用检测决策；本轮拾取与复查均为模拟。':'当前服务未开放检测决策；本轮不执行真实拾取。';
+  if(decisionEnabled&&data.decision.detection){
+    const d=data.decision.detection;
+    const reason=d.last_frame_age_seconds===null?'等待检测帧':d.last_frame_age_seconds>1?'检测流已中断':
+      ({WAITING_FRAMES:'等待检测帧',NO_NAIL:'未识别到钉子',BELOW_CONFIDENCE:'钉子置信度不足',STALE_FRAME:'检测帧过期',
+        FRAME_OUT_OF_ORDER:'重复或乱序帧',WAITING_STABILITY:'检测尚未稳定',WAITING_CLEAR:'等待目标消失，避免重复触发',
+        NOT_NAVIGATING:'等待导航进入执行阶段',INVALID_FRAME:'检测格式异常',TRIGGERED:'已触发停车处理'}[d.reason]||d.reason);
+    $('decisionStatus').textContent+=` 检测反馈：${reason}；收到 ${d.frames_received} 帧`
+      +(d.nail_confidence==null?'':`，置信度 ${(d.nail_confidence*100).toFixed(0)}%`)
+      +(d.source_frame_age_seconds==null?'':`，帧龄 ${d.source_frame_age_seconds.toFixed(2)} 秒`)+ '。';
+  }
   $('missionMode').textContent = s ? (s.mode === 'mock' ? '模拟' : '真实导航 / 模拟清理') : '—';
   if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent=decisionEnabled?'真实导航 / 模拟拾取':'真实单点导航';
   if(data.capabilities?.preview)$('missionMode').textContent='导航接口预览（模拟）';
