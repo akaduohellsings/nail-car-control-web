@@ -460,6 +460,9 @@ body {
   }
 }
 .video-detail { color:#8b9aaf;font-size:12px;line-height:1.6;margin:5px 0;overflow-wrap:anywhere }
+.manual-speeds { display:flex;gap:12px;flex-wrap:wrap;margin:10px 0 }
+.manual-speeds label { flex:1;min-width:140px;color:#a9b8cd;font-size:12px }
+.manual-speeds input { display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:7px;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:5px }
 #videoStatus { animation:none;color:#e6edf3;text-shadow:0 0 4px #000 }
 #videoStatus[data-state="ONLINE"] { color:#80dfb1 }
 #videoStatus[data-state="UNREACHABLE"],#videoStatus[data-state="NO_FRAMES"],#videoStatus[data-state="STALLED"] { color:#ff9a9f }

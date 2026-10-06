@@ -6,6 +6,7 @@ const statusFields = ['schema_version','mode','source_instance_id','sequence','o
   'state','saved_goal','target_event_id','attempt','max_attempts','alarm','pending','cleaning_mode',
   'stationary_confirmed','halt_state','owned_goal_id','goal_response_pending','action_server_ready'];
 const states = ['IDLE','NAV_STARTING','NAVIGATING','CANCELING','WAIT_STOP','CLEANING','VERIFYING','RESUMING','PAUSED','FAULT'];
+const manualDirections=['stop','forward','backward','left','right','left_forward','right_forward','left_backward','right_backward'];
 export function validateEnvelope(data) {
   const invalid = () => { throw new Error('导航状态格式不符合 v1 接口'); };
   if (!data || data.schema_version !== 1 || typeof data.read_only !== 'boolean' || typeof data.bridge_instance_id !== 'string'
@@ -43,6 +44,14 @@ export function validateEnvelope(data) {
       || limits.defaults.angular_rad_s>limits.angular_max_rad_s)) invalid();
   if(data.control?.speed_limits!=null && !speeds(data.control.speed_limits)) invalid();
   const waypointCap=data.capabilities?.waypoints;
+  const manualCap=data.capabilities?.manual_control;
+  if(manualCap!==undefined && (typeof manualCap?.supported!=='boolean' || !Array.isArray(manualCap.directions)
+      || new Set(manualCap.directions).size!==manualCap.directions.length
+      || manualCap.directions.some(direction=>!manualDirections.includes(direction))
+      || !manualCap.directions.includes('stop') || !positive(manualCap.speed_limits?.linear_max_m_s)
+      || !positive(manualCap.speed_limits?.angular_max_rad_s) || !speeds(manualCap.speed_limits?.defaults)
+      || manualCap.speed_limits.defaults.linear_m_s>manualCap.speed_limits.linear_max_m_s
+      || manualCap.speed_limits.defaults.angular_rad_s>manualCap.speed_limits.angular_max_rad_s))invalid();
   if(waypointCap!==undefined && (typeof waypointCap?.supported!=='boolean'
       || !Number.isSafeInteger(waypointCap.max_points) || waypointCap.max_points<1 || waypointCap.max_points>20))invalid();
   const route=data.control?.route;
@@ -60,7 +69,9 @@ export function validateEnvelope(data) {
     const c = data.control, cap = data.capabilities;
     const simulation=cap?.environment==='local_simulation' && s?.mode==='mock';
     const robot=cap?.environment==='robot_navigation' && ['nav2_with_mock_cleaning','nav2_with_image_pickup'].includes(s?.mode)
-      && Array.isArray(cap.commands) && cap.commands.length===5
+      && Array.isArray(cap.commands) && new Set(cap.commands).size===cap.commands.length
+      && ((cap.commands.length===5&&manualCap?.supported!==true)
+        ||(manualCap!==undefined&&cap.commands.length===8&&['request_manual','release_manual','manual_intent'].every(command=>cap.commands.includes(command))))
       && ['start','pause','resume','reset','stop'].every(command=>cap.commands.includes(command));
     if (!cap || cap.schema_version !== 1 || (!simulation&&!robot) || cap.control_enabled !== true
         || !c || c.schema_version !== 1
@@ -70,7 +81,8 @@ export function validateEnvelope(data) {
         || !(c.controller_id === null || typeof c.controller_id === 'string')
         || typeof c.map_id !== 'string' || !c.map_id || typeof c.localization_valid !== 'boolean'
         || !Number.isFinite(c.lease_remaining_seconds) || c.lease_remaining_seconds < 0
-        || !['stop','forward','backward','left','right'].includes(c.manual_direction)) invalid();
+        || !manualDirections.includes(c.manual_direction)
+        || (!['stop','forward','backward','left','right'].includes(c.manual_direction)&&!manualCap?.directions.includes(c.manual_direction))) invalid();
     if (c.command_result !== null) validateReceipt(c.command_result);
   }
   return data;
@@ -92,6 +104,8 @@ export function controlPolicy(data, sessionId, locallyAllowed = true) {
     && ((data.capabilities.environment==='local_simulation'&&s?.mode==='mock')
       || (data.capabilities.environment==='robot_navigation'&&['nav2_with_mock_cleaning','nav2_with_image_pickup'].includes(s?.mode)));
   const simulation=data?.capabilities?.environment==='local_simulation';
+  const manualSupported=simulation || (data?.capabilities?.manual_control?.supported===true
+    && ['request_manual','release_manual','manual_intent'].every(command=>data.capabilities.commands?.includes(command)));
   const own=c?.controller_id===sessionId, free=c?.controller_id===null, ready=available && (own||free);
   const busy=c?.command_result?.status==='pending', halting=c?.phase==='HALTING', manual=ready&&own&&c.owner==='manual';
   const stopped=s?.stationary_confirmed===true && !s.owned_goal_id && s.goal_response_pending===false && s.halt_state!=='UNCONFIRMED';
@@ -103,9 +117,9 @@ export function controlPolicy(data, sessionId, locallyAllowed = true) {
     pause:ready&&!busy&&!halting&&(s.state!=='IDLE'||routeActive)&&s.state!=='FAULT'&&!routePaused&&c.owner!=='manual',
     resume:ready&&!busy&&!halting&&stopped&&c.localization_valid&&(s.state==='PAUSED'||routePaused)&&!!s.saved_goal&&c.owner!=='manual'&&c.phase!=='FAULT',
     reset:ready&&!busy&&!halting&&stopped&&['IDLE','PAUSED','FAULT'].includes(s.state)&&c.owner!=='manual',
-    requestManual:simulation&&ready&&!busy&&!halting&&c.owner!=='manual'&&c.phase!=='FAULT',
-    releaseManual:simulation&&manual&&!busy,
-    manualIntent:simulation&&manual&&!busy&&c.phase==='MANUAL_READY',
+    requestManual:manualSupported&&ready&&!busy&&!halting&&c.owner!=='manual'&&c.phase!=='FAULT'&&s?.state!=='FAULT',
+    releaseManual:manualSupported&&manual&&!busy,
+    manualIntent:manualSupported&&manual&&!busy&&c.phase==='MANUAL_READY',
     stop:available};
 }
 

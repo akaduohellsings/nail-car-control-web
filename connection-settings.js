@@ -17,7 +17,8 @@ export function installSettings(button, onSaved) {
       <label>检测事件服务 <input name="eventsUrl" type="url" required></label>
       <label>导航任务服务 <input name="navigationUrl" type="url"></label>
     </details>
-    <label>手动控制方式 <select name="manualMode"><option value="standalone">独立手动 · 需关闭导航</option><option value="coordinated">任务协调 · 当前仅本地模拟</option></select></label>
+    <label>手动控制方式 <select name="manualMode"><option value="standalone">独立手动 · 需关闭导航</option><option value="coordinated">任务协调 · 需服务支持接管</option></select></label>
+    <p>连接真实导航服务后，方向按钮自动使用接管通道，不再调用旧移动服务。</p>
     <p>切换页面沿用地址；每个页面重新获取状态和控制权。</p>
     <p data-error role="alert"></p><button type="submit">保存设置</button></form>`;
   document.body.append(dialog);

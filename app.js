@@ -1,7 +1,8 @@
 import {createVideoMonitor, createEventMonitor} from './service-monitor.js?v=20261006-video-topic';
 import {loadConfig} from './connection-config.js?v=20261006-video-network';
-import {installSettings} from './connection-settings.js?v=20261006-video-network';
-import {createNavigationApi, controlPolicy} from './navigation-api.js?v=20261006-waypoints';
+import {installSettings} from './connection-settings.js?v=20261006-manual';
+import {createNavigationApi, controlPolicy} from './navigation-api.js?v=20261006-manual';
+import {parseSpeedInputs} from './navigation-speed.js';
 import {stateLabels, connectionLabels} from './task-labels.js';
 import {bindManualInput} from './manual-input.js';
 
@@ -11,7 +12,8 @@ const now = () => new Date().toLocaleTimeString('zh-CN', {hour12:false});
 const CMD_LABELS={forward:'前进',backward:'后退',left:'左转',right:'右转',left_forward:'左前',
   right_forward:'右前',left_backward:'左后',right_backward:'右后',stop:'停止'};
 let config=loadConfig(), api=createNavigationApi({baseUrl:config.navigationUrl});
-let task=null, standaloneEnabled=false, pending=null, lastTask='', input;
+let task=null, standaloneEnabled=false, pending=null, lastTask='', input,robotCoordinator=false;
+function coordinated(){return robotCoordinator||config.manualMode==='coordinated';}
 
 function span(cls,text){const element=document.createElement('span');element.className=cls;element.textContent=text;return element;}
 function addMessage(type,text){
@@ -41,24 +43,31 @@ function navigationBlocksStandalone(){
       task.control?.owner==='automatic' || task.control?.owner==='manual' || task.control?.owner==='blocked');
 }
 function canMove(direction){
-  if(config.manualMode==='coordinated')return !pending&&policy().manualIntent&&['forward','backward','left','right'].includes(direction);
+  if(coordinated())return !pending&&policy().manualIntent&&(task?.capabilities?.manual_control?.directions||['forward','backward','left','right','stop']).includes(direction);
   return standaloneEnabled&&!navigationBlocksStandalone();
 }
 function updateControls(){
-  const coordinated=config.manualMode==='coordinated', p=policy();
-  $('enableManualButton').hidden=coordinated;
+  const useCoordinator=coordinated(), p=policy();
+  $('enableManualButton').hidden=useCoordinator;
   $('enableManualButton').disabled=navigationBlocksStandalone();
   $('enableManualButton').textContent=standaloneEnabled?'关闭独立手动':'启用独立手动（导航须关闭）';
-  $('requestManualButton').hidden=!coordinated;$('releaseManualButton').hidden=!coordinated;
+  $('requestManualButton').hidden=!useCoordinator;$('releaseManualButton').hidden=!useCoordinator;
   $('requestManualButton').disabled=!p.requestManual||!!pending;
   $('releaseManualButton').disabled=!p.releaseManual||!!pending;
   for(const button of buttons)button.disabled=button.dataset.cmd==='stop'?false:!canMove(button.dataset.cmd);
   if(input?.holding&&!canMove('forward'))input.cancel();
-  if(coordinated)status(p.manualIntent?'本地模拟 · 手动接管已确认':'任务协调 · 等待接管',p.manualIntent?'green':'yellow');
+  const real=task?.capabilities?.environment==='robot_navigation';
+  for(const id of ['manualLinearSpeed','manualAngularSpeed'])$(id).disabled=p.manual||!!pending;
+  const limits=task?.capabilities?.manual_control?.speed_limits||task?.capabilities?.speed_limits;
+  $('manualLinearSpeed').max=limits?.linear_max_m_s??.06;
+  $('manualAngularSpeed').max=(limits?.angular_max_rad_s??.24)*180/Math.PI;
+  if(useCoordinator)status(p.manualIntent?((real?'真实手动 · 接管已确认':'本地模拟 · 手动接管已确认')+
+    ' · 方向：'+(CMD_LABELS[task.control.manual_direction]||'未知')):
+    (real&&task?.capabilities?.manual_control?.supported!==true?'当前服务未开放手动，请加载新版':'任务协调 · 等待接管'),p.manualIntent?'green':'yellow');
   else status(standaloneEnabled?'独立手动已启用 · 不代表停车确认':'独立手动未启用');
 }
 function showReceipt(receipt){
-  const labels={pending:'已接收，等待后台确认',succeeded:'已完成（模拟）',failed:'失败',rejected:'被拒绝'};
+  const labels={pending:'已接收，等待后台确认',succeeded:task?.mission?.mode==='mock'?'已完成（模拟）':'已完成',failed:'失败',rejected:'被拒绝'};
   $('controlFeedback').textContent=labels[receipt.status]+(receipt.reason?' · '+receipt.reason:'');
   if(receipt.status!=='pending'){
     pending=null;addMessage('system',$('controlFeedback').textContent);
@@ -66,11 +75,12 @@ function showReceipt(receipt){
 }
 function renderTask(data){
   task=data;
+  if(data.capabilities?.environment==='robot_navigation')robotCoordinator=true;
   if(pending&&data.bridge_instance_id&&pending.bridge!==data.bridge_instance_id){
     pending=null;$('controlFeedback').textContent='服务已重启，上一操作结果未确认。';
   }
   const s=data.mission, online=data.connection==='ONLINE';
-  const mode=s?(s.mode==='mock'?'模拟任务':'真实导航 · 清理模拟'):'';
+  const mode=s?(s.mode==='mock'?'模拟任务':s.cleaning_mode==='image_pickup'?'真实导航与拾取':'真实导航'):'';
   $('taskSummary').textContent=(connectionLabels[data.connection]||'状态未知')+
     (s?` · ${mode} · ${stateLabels[s.state]}${online?'':'（最后状态）'}`:'');
   $('taskSummary').title=online?`停车确认：${s.stationary_confirmed===true?'已确认':'未确认'}`:'数据不可用，停车未确认';
@@ -91,7 +101,7 @@ async function legacyCommand(direction,baseUrl=config.controlUrl){
   }finally{clearTimeout(timer);}
 }
 async function stop(){
-  if(config.manualMode==='coordinated'){
+  if(coordinated()){
     if(api.implemented){
       const selected=api,id=crypto.randomUUID();pending={id,bridge:task?.bridge_instance_id};updateControls();
       const result=await selected.stop({request_id:id});
@@ -100,22 +110,30 @@ async function stop(){
     else throw new Error('协调服务未连接或仅支持只读，无法请求停车');
   }else await legacyCommand('stop');
 }
-input=bindManualInput({buttons,canMove,stopAll:stop,repeat:()=>config.manualMode==='coordinated',
+input=bindManualInput({buttons,canMove,stopAll:stop,repeat:coordinated,
   move:async direction=>{
-    if(config.manualMode==='coordinated'){
+    if(coordinated()){
       const receipt=await api.manualIntent({direction});
-      if(receipt.status!=='succeeded')throw new Error(receipt.reason||'模拟方向未被接受');
+      if(receipt.status!=='succeeded')throw new Error(receipt.reason||'方向指令未被接受');
     }else await legacyCommand(direction);
-  },stop:()=>config.manualMode==='coordinated'&&api.controlAvailable?
+  },stop:()=>coordinated()&&api.controlAvailable?
     api.manualIntent({direction:'stop'}).then(receipt=>{if(receipt.status!=='succeeded')return stop();}).catch(()=>stop()):stop(),
   onError:error=>{standaloneEnabled=false;addMessage('system','控制结果未确认：'+error.message);updateControls();}
 });
 async function operation(method){
+  let speedLimits;
+  if(method==='requestManual'){
+    try{speedLimits=parseSpeedInputs(Number($('manualLinearSpeed').value),Number($('manualAngularSpeed').value),
+      task?.capabilities?.manual_control?.speed_limits||task?.capabilities?.speed_limits);}
+    catch(error){$('controlFeedback').textContent='请求未发送：'+error.message;return;}
+  }
   input.cancel(false);const selected=api,id=crypto.randomUUID();pending={id,bridge:task?.bridge_instance_id};updateControls();
   try{
-    const result=await selected[method]({request_id:id});
+    const payload={request_id:id};
+    if(speedLimits)payload.speed_limits=speedLimits;
+    const result=await selected[method](payload);
     if(selected===api&&pending?.id===id){showReceipt(result);updateControls();}
-  }catch(error){if(selected===api){$('controlFeedback').textContent='结果未确认：'+error.message;updateControls();}}
+  }catch(error){if(selected===api){pending=null;$('controlFeedback').textContent='结果未确认：'+error.message;updateControls();}}
 }
 $('requestManualButton').addEventListener('click',()=>void operation('requestManual'));
 $('releaseManualButton').addEventListener('click',()=>void operation('releaseManual'));
@@ -127,7 +145,7 @@ $('enableManualButton').addEventListener('click',()=>{
   $('controlFeedback').textContent=standaloneEnabled?'独立手动已启用；仅在导航关闭时使用。':'独立手动已关闭。';updateControls();
 });
 function applyConfig(value){
-  input.cancel();standaloneEnabled=false;pending=null;unsubscribe();api.disconnect();config=value;
+  input.cancel();standaloneEnabled=false;pending=null;unsubscribe();api.disconnect();config=value;robotCoordinator=false;
   api=createNavigationApi({baseUrl:config.navigationUrl});unsubscribe=api.subscribeStatus(renderTask);
   renderTask({connection:'DISCONNECTED',mission:null});restartMonitors();
   addMessage('system','共用连接设置已更新，请重新连接任务状态。');

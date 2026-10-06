@@ -100,6 +100,43 @@ test('real Type-C navigation requires explicit capability and keeps manual contr
  }finally{api.disconnect();globalThis.fetch=previous;}
 });
 
+function realManualStatus(){
+ const d=status();d.mission.mode='nav2_with_mock_cleaning';
+ d.capabilities={schema_version:1,environment:'robot_navigation',control_enabled:true,
+  commands:['start','pause','resume','reset','stop','request_manual','release_manual','manual_intent'],
+  manual_control:{supported:true,directions:['stop','forward','backward','left','right','left_forward','right_forward','left_backward','right_backward'],
+   speed_limits:{linear_max_m_s:.3,angular_max_rad_s:Math.PI/4,defaults:{linear_m_s:.05,angular_rad_s:.24}}}};
+ return d;
+}
+test('real manual requires declared commands and confirmed ownership; stale and foreign sessions cannot drive',()=>{
+ const d=realManualStatus();validateEnvelope(d);
+ assert.equal(controlPolicy(d,'A').requestManual,true);assert.equal(controlPolicy(d,'A').manualIntent,false);
+ d.control.owner='manual';d.control.phase='MANUAL_READY';d.control.controller_id='A';d.control.manual_direction='left_backward';
+ validateEnvelope(d);assert.equal(controlPolicy(d,'A').manualIntent,true);assert.equal(controlPolicy(d,'A').start,false);
+ assert.equal(controlPolicy(d,'B').manualIntent,false);
+ d.connection='STALE';assert.equal(controlPolicy(d,'A').manualIntent,false);d.connection='ONLINE';
+ d.capabilities.manual_control.supported=false;assert.equal(controlPolicy(d,'A').manualIntent,false);
+ d.capabilities.commands.pop();assert.throws(()=>validateEnvelope(d));
+});
+test('real manual transport uses the task API and preserves selected speed and intent order',async()=>{
+ const previous=globalThis.fetch,calls=[];let state=realManualStatus();
+ globalThis.fetch=async(url,options)=>{
+  calls.push({url,options});if(options.method==='GET')return {ok:true,json:async()=>state};
+  const body=JSON.parse(options.body);return {ok:true,json:async()=>({schema_version:1,bridge_instance_id:body.bridge_instance_id,
+   request_id:body.request_id,command:body.command,status:body.command==='request_manual'?'pending':'succeeded',reason:null})};
+ };
+ const api=createNavigationApi({baseUrl:'http://192.168.137.2:8092',sessionId:'A'});
+ try{
+  await api.getStatus();await api.requestManual({speed_limits:{linear_m_s:.1,angular_rad_s:.4}});
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body).speed_limits,{linear_m_s:.1,angular_rad_s:.4});
+  state={...state,control:{...state.control,owner:'manual',phase:'MANUAL_READY',controller_id:'A',control_epoch:2}};
+  await api.getStatus();await api.manualIntent({direction:'left_backward'});await api.manualIntent({direction:'stop'});
+  const intents=calls.filter(call=>call.options.method==='POST').map(call=>JSON.parse(call.options.body)).filter(body=>body.command==='manual_intent');
+  assert.equal(intents[1].intent_sequence,intents[0].intent_sequence+1);
+  assert.ok(calls.every(call=>call.url.startsWith('http://192.168.137.2:8092/api/v1/')));
+ }finally{api.disconnect();globalThis.fetch=previous;}
+});
+
 test('local freshness deadline disables control before a stalled poll returns',async()=>{
  const previous=globalThis.fetch,received=[];let reads=0;
  globalThis.fetch=async(url,options)=>{

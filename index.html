@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>钉探 - 智能小车远程控制</title>
-  <link rel="stylesheet" href="styles.css?v=20261006-video-network" />
+  <link rel="stylesheet" href="styles.css?v=20261006-manual" />
   <link rel="stylesheet" href="topbar.css" />
   <link rel="stylesheet" href="connection-settings.css?v=20261006-video-network" />
 </head>
@@ -69,7 +69,9 @@
         <section class="card control-card">
           <h3 class="card-title">命令控制窗口</h3>
           <div class="control-form">
-            <div class="form-params" id="formParams"><button id="connectTaskButton" type="button">连接任务状态</button> <button id="enableManualButton" type="button">启用独立手动</button> <button id="requestManualButton" type="button" disabled>申请接管</button> <button id="releaseManualButton" type="button" disabled>结束接管</button><p id="controlFeedback" role="status">独立手动需关闭导航；任务协调当前仅本地模拟。</p></div>
+            <div class="form-params" id="formParams"><button id="connectTaskButton" type="button">连接任务状态</button> <button id="enableManualButton" type="button">启用独立手动</button> <button id="requestManualButton" type="button" disabled>申请接管</button> <button id="releaseManualButton" type="button" disabled>结束接管</button>
+              <div class="manual-speeds"><label>移动速度（米/秒）<input id="manualLinearSpeed" type="number" min="0.01" step="0.01" max="0.3" value="0.05"></label><label>转向速度（度/秒）<input id="manualAngularSpeed" type="number" min="1" step="1" max="45" value="13"></label></div>
+              <p id="controlFeedback" role="status">连接任务服务后申请接管。按住行驶、松手停车；斜向按钮平移，左/右按钮原地转向。</p></div>
           </div>
           <div class="direction-pad">
             <button class="dpad-btn" data-cmd="left_forward">↖ 左前</button>
@@ -107,6 +109,6 @@
     </main>
   </div>
 
-  <script type="module" src="app.js?v=20261006-video-topic"></script>
+  <script type="module" src="app.js?v=20261006-manual"></script>
 </body>
 </html>
