@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createJpegParser,createEventMonitor,createVideoMonitor} from '../service-monitor.js';
+import {createJpegParser,createEventMonitor,createVideoMonitor,videoStreamUrl} from '../service-monitor.js';
+
+test('legacy stream query preserves literal ROS slashes and rejects injected parameters',()=>{
+  assert.equal(videoStreamUrl('http://robot:8080/','/camera/color/image_raw'),'http://robot:8080/stream?topic=/camera/color/image_raw');
+  assert.equal(videoStreamUrl('http://robot:8080','/detected_image'),'http://robot:8080/stream?topic=/detected_image');
+  for(const topic of ['/raw&topic=/other','/raw?type=png','%2Fraw','/raw\r\n','raw'])assert.throws(()=>videoStreamUrl('http://robot',topic));
+});
 
 function videoHarness(fetcher){
   let time=0,id=0;const jobs=new Map(),states=[];
@@ -18,7 +24,7 @@ test('video distinguishes missing service from connected service without images'
     const h=videoHarness(async(_url,{signal})=>connected?{ok:true,body:{getReader:()=>({read:()=>abortable(signal),releaseLock(){}})}}:await abortable(signal));
     h.monitor.start('http://video');await flush();h.tick();await flush();
     assert.equal(h.states.at(-1).state,connected?'NO_FRAMES':'UNREACHABLE');
-    assert.equal(h.states.at(-1).url,'http://video/stream?topic=%2Fdetected_image');h.monitor.stop();
+    assert.equal(h.states.at(-1).url,'http://video/stream?topic=/detected_image');h.monitor.stop();
   }
 });
 test('video displays frames, detects stalls, and ignores old replies after switching',async()=>{
@@ -31,7 +37,7 @@ test('video displays frames, detects stalls, and ignores old replies after switc
   const resolvers=[],late=videoHarness(()=>new Promise(resolve=>resolvers.push(resolve)));
   late.monitor.start('http://old');late.monitor.start('http://new');
   let canceled=false;resolvers[0]({ok:true,body:{cancel:async()=>{canceled=true;}}});await flush();
-  assert.equal(canceled,true);assert.equal(late.states.at(-1).url,'http://new/stream?topic=%2Fdetected_image');late.monitor.stop();
+  assert.equal(canceled,true);assert.equal(late.states.at(-1).url,'http://new/stream?topic=/detected_image');late.monitor.stop();
 });
 test('legacy server without CORS retains image compatibility and reports failed loading',async()=>{
   const h=videoHarness(async()=>{throw new TypeError('Failed to fetch');});

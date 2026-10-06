@@ -6,6 +6,7 @@ This script is prepared offline; hardware startup/shutdown still needs validatio
 import argparse
 import json
 import os
+import re
 import shlex
 import signal
 import socket
@@ -16,6 +17,13 @@ import urllib.request
 from pathlib import Path
 
 
+def video_stream_url(base_url, topic):
+    # The installed async_web_server_cpp does not decode query values.
+    if not isinstance(topic, str) or not re.fullmatch(r'/[A-Za-z_][A-Za-z0-9_]*(/[A-Za-z_][A-Za-z0-9_]*)*', topic):
+        raise ValueError('Invalid absolute image topic')
+    return base_url.rstrip('/') + '/stream?' + urllib.parse.urlencode({'topic': topic}, safe='/')
+
+
 def verify_video_streams(base_url='http://127.0.0.1:8080',
                          topics=('/camera/color/image_raw', '/detected_image'),
                          timeout=8, check=lambda: None):
@@ -23,7 +31,7 @@ def verify_video_streams(base_url='http://127.0.0.1:8080',
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     counts = {}
     for topic in topics:
-        url = base_url.rstrip('/') + '/stream?' + urllib.parse.urlencode({'topic': topic})
+        url = video_stream_url(base_url, topic)
         deadline = time.monotonic() + timeout
         pending = b''
         count = 0

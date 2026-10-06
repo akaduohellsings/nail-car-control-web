@@ -1,4 +1,4 @@
-import {createVideoMonitor, createEventMonitor} from './service-monitor.js?v=20261006-video-network';
+import {createVideoMonitor, createEventMonitor} from './service-monitor.js?v=20261006-video-topic';
 import {loadConfig} from './connection-config.js?v=20261006-video-network';
 import {installSettings} from './connection-settings.js?v=20261006-video-network';
 import {createNavigationApi, controlPolicy} from './navigation-api.js?v=20261006-waypoints';

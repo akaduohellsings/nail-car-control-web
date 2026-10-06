@@ -59,6 +59,13 @@ export function createJpegParser(onFrame) {
   };
 }
 
+export function videoStreamUrl(baseUrl,topic) {
+  if(typeof topic!=='string'||!/^\/[A-Za-z_][A-Za-z0-9_]*(?:\/[A-Za-z_][A-Za-z0-9_]*)*$/.test(topic))
+    throw new Error('图像话题格式无效');
+  // Legacy async_web_server_cpp passes query values directly to ROS.
+  return baseUrl.replace(/\/$/,'')+'/stream?topic='+topic;
+}
+
 export function createVideoMonitor({image,onStatus,fetcher=fetch,now=()=>Date.now(),
     clock={setTimeout:(...args)=>globalThis.setTimeout(...args),clearTimeout:id=>globalThis.clearTimeout(id),
       setInterval:(...args)=>globalThis.setInterval(...args),clearInterval:id=>globalThis.clearInterval(id)}}) {
@@ -70,7 +77,7 @@ export function createVideoMonitor({image,onStatus,fetcher=fetch,now=()=>Date.no
   }
   function stop(){generation++;clear();onStatus({state:'PAUSED'});}
   function start(baseUrl,topic='/detected_image'){
-    stop();url=baseUrl.replace(/\/$/,'')+'/stream?topic='+encodeURIComponent(topic);attempt=0;
+    stop();url=videoStreamUrl(baseUrl,topic);attempt=0;
     const epoch=generation;
     const failed=(error,state='UNREACHABLE')=>{
       if(epoch!==generation)return;

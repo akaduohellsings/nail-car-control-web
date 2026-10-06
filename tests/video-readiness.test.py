@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from robot_web_stack import verify_video_streams
+from robot_web_stack import verify_video_streams,video_stream_url
 
 
 class VideoReadinessTests(unittest.TestCase):
@@ -24,14 +24,15 @@ class VideoReadinessTests(unittest.TestCase):
 
     def test_both_topics_require_complete_jpegs(self):
         frame=b'--frame\r\n\xff\xd8data\xff\xd9\r\n'
-        base=self.serve({'/stream?topic=%2Fcamera%2Fcolor%2Fimage_raw':frame*2,
-                         '/stream?topic=%2Fdetected_image':frame*3})
+        # Installed server query values are not percent-decoded.
+        base=self.serve({'/stream?topic=/camera/color/image_raw':frame*2,
+                         '/stream?topic=/detected_image':frame*3})
         counts=verify_video_streams(base,timeout=1)
         self.assertGreaterEqual(counts['/camera/color/image_raw'],2)
         self.assertGreaterEqual(counts['/detected_image'],2)
 
     def test_open_http_service_without_frames_is_rejected(self):
-        base=self.serve({'/stream?topic=%2Fdetected_image':b'--frame\r\n\xff\xd8unfinished'})
+        base=self.serve({'/stream?topic=/detected_image':b'--frame\r\n\xff\xd8unfinished'})
         with self.assertRaisesRegex(RuntimeError,'detected_image.*0/2'):
             verify_video_streams(base,topics=('/detected_image',),timeout=1)
 
@@ -39,6 +40,12 @@ class VideoReadinessTests(unittest.TestCase):
         base=self.serve({},content_type='text/html')
         with self.assertRaisesRegex(RuntimeError,'Expected MJPEG'):
             verify_video_streams(base,topics=('/detected_image',),timeout=1)
+
+    def test_legacy_topic_slashes_stay_literal_and_query_injection_is_rejected(self):
+        self.assertEqual(video_stream_url('http://robot:8080/','/camera/color/image_raw'),
+                         'http://robot:8080/stream?topic=/camera/color/image_raw')
+        for topic in ('/raw&topic=/other','/raw?type=png','%2Fraw','/raw\r\n','raw'):
+            with self.assertRaises(ValueError):video_stream_url('http://robot:8080',topic)
 
 
 if __name__=='__main__':unittest.main()
