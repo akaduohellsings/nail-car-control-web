@@ -22,7 +22,7 @@
     <div class="notice"><span class="notice-icon">i</span><p>开始前确认地图、定位和现场区域。暂停需等待停车确认，恢复会继续原目标。</p><span id="modeNotice">未连接</span></div>
     <div class="workspace">
       <section class="map-card card" aria-labelledby="mapTitle">
-        <div class="card-heading"><div><h2 id="mapTitle">导航地图</h2><p>地图 — <span class="separator">/</span> 定位未确认</p></div><div class="map-tools"><button disabled aria-label="放大地图">＋</button><button disabled aria-label="缩小地图">−</button><button disabled aria-label="回到小车位置">◎</button></div></div>
+        <div class="card-heading"><div><h2 id="mapTitle">导航地图</h2><p>地图 — <span class="separator">/</span> 定位未确认</p></div><div class="map-tools"><button disabled data-map-action="zoom-in" aria-label="放大地图">＋</button><button disabled data-map-action="zoom-out" aria-label="缩小地图">−</button><button disabled data-map-action="center" aria-label="回到小车位置">◎</button></div></div>
         <div class="map-stage"><div class="map-grid"></div><div class="map-empty"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 15l16-6 16 6 16-6v40l-16 6-16-6-16 6zM24 9v40M40 15v40"/><circle cx="33" cy="28" r="6"/></svg><h3>等待地图接入</h3><p>连接地图服务后，将显示地图、小车位置和导航目标。</p><span>尚未加载实车地图</span></div></div>
         <div class="map-footer"><div><span class="legend robot"></span>小车位置 <span class="legend target"></span>目标点</div><span>坐标系：待确认</span></div>
         <div class="map-details"><div><span>当前位置</span><strong>—</strong></div><div><span>车头朝向</span><strong>—</strong></div><div><span>定位状态</span><strong class="muted">未确认</strong></div><div><span>数据更新时间</span><strong>—</strong></div></div>
