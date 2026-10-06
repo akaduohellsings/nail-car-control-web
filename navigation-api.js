@@ -42,6 +42,20 @@ export function validateEnvelope(data) {
       || !speeds(limits.defaults) || limits.defaults.linear_m_s>limits.linear_max_m_s
       || limits.defaults.angular_rad_s>limits.angular_max_rad_s)) invalid();
   if(data.control?.speed_limits!=null && !speeds(data.control.speed_limits)) invalid();
+  const waypointCap=data.capabilities?.waypoints;
+  if(waypointCap!==undefined && (typeof waypointCap?.supported!=='boolean'
+      || !Number.isSafeInteger(waypointCap.max_points) || waypointCap.max_points<1 || waypointCap.max_points>20))invalid();
+  const route=data.control?.route;
+  if(route!=null){
+    if(!['RUNNING','WAITING_STOP','PAUSED','COMPLETED','STOPPED','FAILED'].includes(route.state)
+      || typeof route.map_id!=='string' || !Array.isArray(route.goals)
+      || !Number.isSafeInteger(route.total) || route.total<1 || route.total>20 || route.goals.length!==route.total
+      || !Number.isSafeInteger(route.completed) || route.completed<0 || route.completed>route.total
+      || !Number.isSafeInteger(route.current_index) || route.current_index<0 || route.current_index>=route.total
+      || !(route.reason===null || typeof route.reason==='string')
+      || route.goals.some(goal=>!goal || Object.keys(goal).sort().join()!=='x,y,yaw_deg'
+        || Object.values(goal).some(v=>typeof v!=='number'||!Number.isFinite(v))))invalid();
+  }
   if (data.read_only === false) {
     const c = data.control, cap = data.capabilities;
     const simulation=cap?.environment==='local_simulation' && s?.mode==='mock';
@@ -82,10 +96,12 @@ export function controlPolicy(data, sessionId, locallyAllowed = true) {
   const busy=c?.command_result?.status==='pending', halting=c?.phase==='HALTING', manual=ready&&own&&c.owner==='manual';
   const stopped=s?.stationary_confirmed===true && !s.owned_goal_id && s.goal_response_pending===false && s.halt_state!=='UNCONFIRMED';
   const retry= data?.capabilities?.retry_after_navigation_abort===true && s?.state==='FAULT' && s.alarm==='NAVIGATION_ABORTED';
+  const routeActive=['RUNNING','WAITING_STOP','PAUSED'].includes(c?.route?.state);
+  const routePaused=c?.route?.state==='PAUSED';
   return {available,own,manual,
-    start:ready&&!busy&&!halting&&stopped&&c.localization_valid&&(s.state==='IDLE'||retry)&&c.owner!=='manual',
-    pause:ready&&!busy&&!halting&&s.state!=='IDLE'&&s.state!=='FAULT'&&c.owner!=='manual',
-    resume:ready&&!busy&&!halting&&stopped&&c.localization_valid&&s.state==='PAUSED'&&!!s.saved_goal&&c.owner!=='manual'&&c.phase!=='FAULT',
+    start:ready&&!busy&&!halting&&stopped&&c.localization_valid&&(s.state==='IDLE'||retry)&&!routeActive&&c.owner!=='manual',
+    pause:ready&&!busy&&!halting&&(s.state!=='IDLE'||routeActive)&&s.state!=='FAULT'&&!routePaused&&c.owner!=='manual',
+    resume:ready&&!busy&&!halting&&stopped&&c.localization_valid&&(s.state==='PAUSED'||routePaused)&&!!s.saved_goal&&c.owner!=='manual'&&c.phase!=='FAULT',
     reset:ready&&!busy&&!halting&&stopped&&['IDLE','PAUSED','FAULT'].includes(s.state)&&c.owner!=='manual',
     requestManual:simulation&&ready&&!busy&&!halting&&c.owner!=='manual'&&c.phase!=='FAULT',
     releaseManual:simulation&&manual&&!busy,

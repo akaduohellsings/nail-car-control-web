@@ -360,6 +360,14 @@ dialog label { margin-top: 24px }
 #manualIntentState { color: #a7c8ff }
 
 /* ---------- 响应式 ---------- */
+.route-editor { margin: 12px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px }
+.route-editor[hidden] { display: none }
+.waypoint-list { padding-left: 22px; max-height: 220px; overflow: auto; font-size: 11px }
+.waypoint-list li { padding: 8px 0; border-bottom: 1px solid var(--line) }
+.waypoint-list .waypoint-actions { display: flex; gap: 10px; margin-top: 5px }
+.waypoint-list li.current { color: #e8b462 }
+.waypoint-list li.completed { color: #6cbd9c }
+#navigationMode { width: 100%; padding: 10px; margin-top: 8px; background: #111a27; color: var(--text); border: 1px solid var(--line); border-radius: 6px }
 @media (min-width: 1500px) {
   .workspace { grid-template-columns: minmax(0, 1fr) 380px }
   .map-stage { min-height: 334px }

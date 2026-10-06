@@ -30,7 +30,7 @@ export function createMapView(stage, onSelect) {
   canvas.hidden=true;stage.append(canvas);
   const bitmap=document.createElement('canvas');
   const buttons=[...stage.parentElement.querySelectorAll('[data-map-action]')];
-  let map=null,robot=null,goal=null,active=false,view={scale:1,x:0,y:0},fitScale=1,gesture=null;
+  let map=null,robot=null,goal=null,waypoints=[],active=false,view={scale:1,x:0,y:0},fitScale=1,gesture=null;
   let width=0,height=0;
   const render=()=>{
     if(!map)return;
@@ -46,6 +46,13 @@ export function createMapView(stage, onSelect) {
         ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(end.x,end.y);ctx.strokeStyle=color;ctx.lineWidth=2/view.scale;ctx.stroke();
       }
     };
+    // Straight guide lines show order, not Nav2's obstacle-avoiding route.
+    waypoints.forEach((point,index)=>{
+      const p=worldToPixel(map,point);
+      if(index){const prev=worldToPixel(map,waypoints[index-1]);ctx.beginPath();ctx.moveTo(prev.x,prev.y);ctx.lineTo(p.x,p.y);ctx.strokeStyle='#df9c3680';ctx.lineWidth=1/view.scale;ctx.stroke();}
+      mark({...point,yaw:point.yaw_deg*Math.PI/180},'#df9c36');
+      ctx.font=`${12/view.scale}px sans-serif`;ctx.fillStyle='#f4c273';ctx.fillText(String(index+1),p.x+6/view.scale,p.y-6/view.scale);
+    });
     mark(goal,'#df9c36');mark(robot,'#3984ff');ctx.restore();
     canvas.style.cursor=gesture?'grabbing':active?'crosshair':'grab';
   };
@@ -122,7 +129,7 @@ export function createMapView(stage, onSelect) {
       ctx.putImageData(image,0,0);canvas.hidden=false;stage.querySelector('.map-empty').hidden=true;
       for(const b of buttons)b.disabled=false;resize();if(!sameView)fit();
     },
-    update(pose,target,enabled){robot=pose;goal=target?{...target,yaw:target.yaw_deg*Math.PI/180}:null;active=enabled;render();},
+    update(pose,target,enabled,points=[]){robot=pose;goal=target?{...target,yaw:target.yaw_deg*Math.PI/180}:null;waypoints=points;active=enabled;render();},
     clear(){map=null;gesture=null;canvas.hidden=true;stage.querySelector('.map-empty').hidden=false;for(const b of buttons)b.disabled=true;},
     destroy(){observer.disconnect();canvas.remove();}
   };

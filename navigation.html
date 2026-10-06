@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>钉探 · 导航控制</title>
   <link rel="stylesheet" href="topbar.css" />
-  <link rel="stylesheet" href="navigation.css?v=20261006-real-pickup" />
+  <link rel="stylesheet" href="navigation.css?v=20261006-waypoints" />
   <link rel="stylesheet" href="connection-settings.css" />
 </head>
 <body>
@@ -18,21 +18,27 @@
     <button class="button subtle" id="settingsButton" type="button">连接设置</button>
   </header>
   <main>
-    <div class="page-heading"><div><span class="eyebrow">NAVIGATION</span><h1>导航控制</h1><p>设置单点目标，查看导航任务与停车确认。</p></div><span class="version">单点导航 · Type-C / 无线</span></div>
+    <div class="page-heading"><div><span class="eyebrow">NAVIGATION</span><h1>导航控制</h1><p>设置导航目标，查看任务进度与停车确认。</p></div><span class="version">单点 / 多点 · Type-C / 无线</span></div>
     <div class="notice"><span class="notice-icon">i</span><p>开始前确认地图、定位和现场区域。暂停需等待停车确认，恢复会继续原目标。</p><span id="modeNotice">未连接</span></div>
     <div class="workspace">
       <section class="map-card card" aria-labelledby="mapTitle">
         <div class="card-heading"><div><h2 id="mapTitle">导航地图</h2><p>地图 — <span class="separator">/</span> 定位未确认</p></div><div class="map-tools"><button disabled data-map-action="zoom-in" aria-label="放大地图">＋</button><button disabled data-map-action="zoom-out" aria-label="缩小地图">−</button><button disabled data-map-action="center" aria-label="回到小车位置">◎</button></div></div>
         <div class="map-stage"><div class="map-grid"></div><div class="map-empty"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 15l16-6 16 6 16-6v40l-16 6-16-6-16 6zM24 9v40M40 15v40"/><circle cx="33" cy="28" r="6"/></svg><h3>等待地图接入</h3><p>连接地图服务后，将显示地图、小车位置和导航目标。</p><span>尚未加载实车地图</span></div></div>
-        <div class="map-footer"><div><span class="legend robot"></span>小车位置 <span class="legend target"></span>目标点</div><span>坐标系：待确认</span></div>
+        <div class="map-footer"><div><span class="legend robot"></span>小车位置 <span class="legend target"></span>目标点 / 编号为执行顺序</div><span>坐标系：待确认</span></div>
         <div class="map-details"><div><span>当前位置</span><strong>—</strong></div><div><span>车头朝向</span><strong>—</strong></div><div><span>定位状态</span><strong class="muted">未确认</strong></div><div><span>数据更新时间</span><strong>—</strong></div></div>
       </section>
       <section class="card target-card" aria-labelledby="targetTitle">
-        <div class="card-heading"><div><h2 id="targetTitle">导航目标</h2><p>先选目标，再开始导航</p></div><span class="small-tag">单点导航</span></div>
+        <div class="card-heading"><div><h2 id="targetTitle">导航目标</h2><p>先选目标，再开始导航</p></div><span class="small-tag" id="navigationModeTag">单点导航</span></div>
         <form id="goalForm">
+          <label class="yaw-field">导航方式<select id="navigationMode"><option value="single">单点导航</option><option value="multi">多点导航</option></select></label>
           <button class="map-pick button subtle" type="button" disabled>⌖ 在地图上选择目标 <span>待接入</span></button>
           <div class="coordinate-fields"><label>X 坐标 <span>米</span><input id="goalX" type="number" step="any" placeholder="输入 X" required /></label><label>Y 坐标 <span>米</span><input id="goalY" type="number" step="any" placeholder="输入 Y" required /></label></div>
           <label class="yaw-field">目标朝向 <span>度</span><input id="goalYaw" type="number" step="any" placeholder="输入朝向角度" required /></label>
+          <section id="routeEditor" class="route-editor" hidden aria-label="多点导航队列">
+            <div class="draft-actions"><button type="button" class="button subtle" id="addWaypoint">加入当前点</button><button type="button" class="text-button" id="clearWaypoints">清空点位</button></div>
+            <p class="form-hint" id="routeHint">选点并设置朝向后，点击“加入当前点”，最多 20 点；每到一点停车确认后继续。</p>
+            <ol id="waypointList" class="waypoint-list"></ol>
+          </section>
           <div class="coordinate-fields speed-fields"><label>最大移动速度 <span>米/秒</span><input id="maxLinearSpeed" type="number" min="0.001" max="0.06" step="any" value="0.05" required /></label><label>最大转向速度 <span>度/秒</span><input id="maxAngularSpeed" type="number" min="0.01" max="13.75" step="any" value="13.75" required /></label></div>
           <p class="form-hint" id="speedHint" role="status">速度随下一次开始导航生效；暂停、恢复沿用该次设置。</p>
           <p class="form-hint" id="appliedSpeed" role="status">本次生效速度：尚未下发</p>
@@ -54,6 +60,7 @@
             <div class="status-item"><dt>运行模式</dt><dd id="missionMode">—</dd></div>
             <div class="status-item"><dt>任务阶段</dt><dd id="missionState">—</dd></div>
             <div class="status-item wide"><dt>当前目标</dt><dd id="missionGoal">—</dd></div>
+            <div class="status-item wide"><dt>多点进度</dt><dd id="routeProgress" role="status">尚未启动多点任务</dd></div>
             <div class="status-item"><dt>当前尝试次数</dt><dd id="attemptState">—</dd></div>
           </dl>
         </section>
@@ -97,8 +104,8 @@
       <section class="card takeover-card"><div class="card-heading"><div><h2>手动接管</h2><p>导航取消并确认停车后，才开放手动控制。</p></div><button class="button subtle" id="requestManualButton" disabled>申请手动接管</button></div><div class="takeover-flow"><span><b>1</b>申请接管</span><i>→</i><span><b>2</b>取消导航</span><i>→</i><span><b>3</b>确认停车</span><i>→</i><span><b>4</b>进入手动控制</span></div><div class="takeover-note"><span id="takeoverStatus">实车接口只读，控制权未确认</span></div><div class="manual-panel"><p>本地模拟方向控制 · 按住发送，松开停止 · <a href="index.html">打开手动与视频页 →</a></p><div class="manual-pad"><button class="button subtle" data-direction="forward" disabled>模拟前进</button><button class="button subtle" data-direction="left" disabled>模拟左转</button><button class="button subtle" data-direction="backward" disabled>模拟后退</button><button class="button subtle" data-direction="right" disabled>模拟右转</button></div><p id="manualIntentState">模拟意图：停止</p><button class="button subtle" id="releaseManualButton" disabled>结束手动接管</button></div><p class="form-hint">结束接管只归还控制权，不自动恢复导航。手动页共用连接设置与接管接口，切换后重新获取控制权。</p></section>
       <section class="card log-card"><div class="card-heading"><div><h2>操作记录</h2><p>配置、草稿与任务反馈</p></div><button class="text-button" id="clearLog" type="button">清空记录</button></div><ul id="operationLog" class="operation-log" aria-live="polite"></ul></section>
     </div>
-    <footer>钉探 · 导航控制 <span>单点导航优先 · 多点巡航后续接入</span></footer>
+    <footer>钉探 · 导航控制 <span>多点按顺序执行 · 停止后需重新启动</span></footer>
   </main>
-  <script type="module" src="navigation.js?v=20261006-real-pickup"></script>
+  <script type="module" src="navigation.js?v=20261006-waypoints"></script>
 </body>
 </html>

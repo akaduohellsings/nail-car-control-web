@@ -1,12 +1,14 @@
 import {stateLabels, connectionLabels} from './task-labels.js';
 import {loadConfig} from './connection-config.js';
 import {installSettings} from './connection-settings.js';
-import { createNavigationApi, controlPolicy } from './navigation-api.js?v=20261006-real-pickup';
-import {createMapView} from './navigation-map.js?v=20261006-layout2';
+import { createNavigationApi, controlPolicy } from './navigation-api.js?v=20261006-waypoints';
+import {createMapView} from './navigation-map.js?v=20261006-waypoints';
+import {MAX_WAYPOINTS,parseRouteDraft,routeStartPayload,routeActive,routeProgress} from './navigation-route.js';
 import {parseSpeedInputs,parseSpeedDraft,speedText} from './navigation-speed.js';
 
 const $ = (id) => document.getElementById(id);
-const KEYS = { goal: 'nail.navigation.goalDraft.v1',speed:'nail.navigation.speedDraft.v1' };
+const KEYS = { goal: 'nail.navigation.goalDraft.v1',speed:'nail.navigation.speedDraft.v1',route:'nail.navigation.routeDraft.v1' };
+let routeDraft={map_id:'waiting-for-map',goals:[]},routeListKey='',lastRouteFeedback='';
 let speedEdited=false,speedPolicyKey='';
 const log = (message, error = false) => {
   const item = document.createElement('li');
@@ -49,6 +51,39 @@ const ownerNames={none:'未分配',automatic:'自动任务',manual:'手动控制
 function validInputs(){return ['goalX','goalY','goalYaw'].every(id=>$(id).value.trim()&&Number.isFinite($(id).valueAsNumber));}
 function speedInputs(){return parseSpeedInputs($('maxLinearSpeed').valueAsNumber,$('maxAngularSpeed').valueAsNumber,currentStatus?.capabilities?.speed_limits);}
 function validSpeeds(){try{speedInputs();return true;}catch{return false;}}
+function multiMode(){return $('navigationMode').value==='multi';}
+function routeReady(){try{routeStartPayload(routeDraft,currentStatus?.control?.map_id,currentStatus?.capabilities?.waypoints);return true;}catch{return false;}}
+function renderRoute(){
+  const route=currentStatus?.control?.route,locked=routeActive(route)||!!pendingUi;
+  $('navigationMode').disabled=locked;
+  $('navigationModeTag').textContent=multiMode()?'多点导航':'单点导航';
+  $('routeEditor').hidden=!multiMode();
+  $('addWaypoint').disabled=locked||!validInputs()||!loadedMapId||routeDraft.goals.length>=MAX_WAYPOINTS;
+  $('clearWaypoints').disabled=locked||!routeDraft.goals.length;
+  $('routeProgress').textContent=routeProgress(route)+(currentStatus?.connection==='ONLINE'?'':'（最后状态）');
+  $('routeHint').textContent=routeDraft.goals.length&&routeDraft.map_id!==loadedMapId
+    ?'地图未连接或已切换。请连接原地图，或清空点位后重新选择。'
+    :currentStatus?.capabilities?.waypoints?.supported!==true
+    ?'当前服务未开放多点导航。可准备草稿，启动更新后的服务再执行。'
+    :'选点并设置朝向后，点击“加入当前点”，最多 20 点；每到一点停车确认后继续。';
+  const goals=routeActive(route)?route.goals:routeDraft.goals;
+  const key=JSON.stringify([goals,locked,route?.state,route?.completed,route?.current_index]);
+  if(key===routeListKey)return;routeListKey=key;
+  $('waypointList').replaceChildren();
+  goals.forEach((goal,index)=>{
+    const li=document.createElement('li');
+    li.textContent=`(${goal.x.toFixed(3)}, ${goal.y.toFixed(3)}) 米 · ${goal.yaw_deg}°`;
+    if(routeActive(route)&&index<route.completed)li.className='completed';
+    else if(routeActive(route)&&index===route.current_index)li.className='current';
+    const actions=document.createElement('div');actions.className='waypoint-actions';
+    for(const [name,text,disabled] of [['up','上移',index===0],['down','下移',index===goals.length-1],['remove','移除',false]]){
+      const button=document.createElement('button');button.type='button';button.className='text-button';button.textContent=text;
+      button.disabled=locked||disabled;button.dataset.waypointAction=name;button.dataset.index=index;
+      button.setAttribute('aria-label',`第 ${index+1} 点${text}`);actions.append(button);
+    }
+    li.append(actions);$('waypointList').append(li);
+  });
+}
 function renderSpeeds(){
   const policy=currentStatus?.capabilities?.speed_limits,key=JSON.stringify(policy??null);
   if(policy&&key!==speedPolicyKey&&!speedEdited){
@@ -58,7 +93,7 @@ function renderSpeeds(){
   speedPolicyKey=key;
   $('maxLinearSpeed').max=policy?.linear_max_m_s??.06;
   $('maxAngularSpeed').max=Math.floor((policy?.angular_max_rad_s??.24)*180/Math.PI*100)/100;
-  const running=currentStatus?.connection==='ONLINE'&&currentStatus?.mission&&!['IDLE','PAUSED','FAULT'].includes(currentStatus.mission.state);
+  const running=routeActive(currentStatus?.control?.route)||(currentStatus?.connection==='ONLINE'&&currentStatus?.mission&&!['IDLE','PAUSED','FAULT'].includes(currentStatus.mission.state));
   $('maxLinearSpeed').disabled=running;$('maxAngularSpeed').disabled=running;
   let hint=policy?`移动速度上限 ${policy.linear_max_m_s} 米/秒。速度随下一次开始导航生效；暂停、恢复沿用该次设置。`:'可保存速度草稿，连接支持速度设置的导航服务后生效。';
   try{speedInputs();}catch(error){hint=error.message;}
@@ -68,18 +103,21 @@ function renderSpeeds(){
 }
 function updateControls(){
   renderSpeeds();
+  renderRoute();
   $('autoPickup').disabled=currentStatus?.connection!=='ONLINE'||currentStatus?.capabilities?.auto_pickup?.supported!==true
     || !['IDLE','PAUSED','FAULT'].includes(currentStatus?.mission?.state)||!!pendingUi;
   const p=controlPolicy(currentStatus,api.sessionId,api.controlAvailable);
   for(const action of ['start','pause','resume','reset','requestManual','releaseManual','stop']){
-    $(action+'Button').disabled=!p[action] || (action!=='stop'&&!!pendingUi) || (action==='start'&&(!validInputs()||!validSpeeds()||!currentStatus?.capabilities?.speed_limits));
+    $(action+'Button').disabled=!p[action] || (action!=='stop'&&!!pendingUi) || (action==='start'&&(!(multiMode()?routeReady():validInputs())||!validSpeeds()||!currentStatus?.capabilities?.speed_limits));
   }
   for(const button of document.querySelectorAll('[data-direction]'))button.disabled=!p.manualIntent||!!pendingUi;
   if(!p.manualIntent&&manualHold)stopManual(false);
   const online=currentStatus?.connection==='ONLINE';
   mapView.update(online?currentStatus?.navigation?.robot_pose:null,
     validInputs()?{x:$('goalX').valueAsNumber,y:$('goalY').valueAsNumber,yaw_deg:$('goalYaw').valueAsNumber}:null,
-    online&&currentStatus?.control?.localization_valid===true);
+    online&&currentStatus?.control?.localization_valid===true,
+    online&&routeActive(currentStatus?.control?.route)?currentStatus.control.route.goals:
+      multiMode()&&routeDraft.map_id===loadedMapId?routeDraft.goals:[]);
   const pick=document.querySelector('.map-pick');
   pick.disabled=!online||!loadedMapId||currentStatus?.control?.localization_valid!==true;
   pick.querySelector('span').textContent=loadedMapId?'点击地图空白区':'等待地图';
@@ -134,6 +172,8 @@ function renderStatus(data) {
   if(data.capabilities?.preview)$('startButton').querySelector('span').textContent='模拟反馈';
   if(data.read_only===false)$('modeNotice').textContent=data.capabilities?.preview?'接口预览 · 地图与导航反馈均模拟':data.capabilities?.environment==='robot_navigation'
     ?(data.capabilities?.continuous_testing?(data.capabilities?.retry_after_navigation_abort?'真实单点导航 · 连续测试：到达或普通导航失败并确认停车后，可选下一点开始':'真实单点导航 · 连续测试：到达后可直接选下一点，失败后停止并重置'):'真实单点导航 · 拾取未启用'):'本地模拟 · 所有移动与停车均模拟';
+  if(data.capabilities?.waypoints?.supported&&data.read_only===false&&!data.capabilities.preview)$('modeNotice').textContent=data.capabilities.environment==='robot_navigation'
+    ?'真实导航 · 支持多点顺序执行；故障中断队列，暂停后需明确恢复':'本地模拟 · 支持多点队列，移动与停车均模拟';
   $('controlOwner').textContent=online&&c?ownerNames[c.owner]:'未确认';
   $('controlPhase').textContent=online&&c?phaseNames[c.phase]:'—';
   $('controllerPage').textContent=online&&c?(c.controller_id===null?'未占用':c.controller_id===api.sessionId?'本页':'其他页面'):'—';
@@ -170,11 +210,14 @@ function renderStatus(data) {
     $('decisionStatus').textContent+=` 拾取阶段：${stage}；已完成动作 ${p.action_count} 次。`+(p.error?` 原因：${p.error}。`:'');
   }
   $('missionMode').textContent = s ? (s.mode === 'mock' ? '模拟' : '真实导航 / 模拟清理') : '—';
-  if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent=decisionEnabled?(realPickup?'真实导航 / 真实拾取':'真实导航 / 模拟拾取'):'真实单点导航';
+  if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent=decisionEnabled?(realPickup?'真实导航 / 真实拾取':'真实导航 / 模拟拾取'):(c?.route?'真实多点导航':'真实单点导航');
   if(data.capabilities?.preview)$('missionMode').textContent='导航接口预览（模拟）';
   const arrived=s?.state==='IDLE'&&s.saved_goal&&s.halt_state==='NONE'&&s.owned_goal_id===null&&s.goal_response_pending===false&&s.stationary_confirmed===true;
   const decisionPhase=decisionEnabled?(realPickup?{CLEANING:'真实拾取中',VERIFYING:'核对动作与停车'}:{CLEANING:'模拟拾取中',VERIFYING:'模拟复查中'})[s?.state]:null;
   $('missionState').textContent = s ? ((arrived?'已到达':decisionPhase||stateLabels[s.state]) + (online ? '' : '（最后状态）')) : '—';
+  if(c?.route?.state==='WAITING_STOP')$('missionState').textContent='点位已到达，等待停车确认';
+  if(c?.route?.state==='PAUSED')$('missionState').textContent='多点任务已暂停';
+  if(c?.route?.state==='COMPLETED')$('missionState').textContent='多点任务全部完成';
   $('missionGoal').textContent = s?.saved_goal ? `(${s.saved_goal.x}, ${s.saved_goal.y}) 米 · ${s.saved_goal.yaw_deg}°` : '—';
   $('stationaryState').textContent = !online ? '未确认（数据不可用）' :
     (s.stationary_confirmed === null ? '未提供（模拟）' : s.stationary_confirmed ? '已确认' : '未确认');
@@ -196,6 +239,8 @@ function renderStatus(data) {
       ['UNREACHABLE','INVALID','CONFLICT'].includes(data.connection));
     lastFeedback = feedback;
   }
+  const routeFeedback=JSON.stringify([data.bridge_instance_id,c?.route?.state,c?.route?.completed,c?.route?.current_index]);
+  if(online&&c?.route&&routeFeedback!==lastRouteFeedback){log('多点导航：'+routeProgress(c.route),c.route.state==='FAILED');lastRouteFeedback=routeFeedback;}
   updateControls();
 }
 let api = createNavigationApi({ baseUrl: loadConfig().navigationUrl });
@@ -243,11 +288,30 @@ async function submitOperation(method, payload={}){
   }
 }
 $('startButton').addEventListener('click',()=>{
-  if(!validInputs()||!validSpeeds())return;
+  if(!(multiMode()?routeReady():validInputs())||!validSpeeds())return;
   void submitOperation('start',{map_id:currentStatus?.control?.map_id,
     speed_limits:speedInputs(),
     ...(currentStatus?.capabilities?.auto_pickup?.supported===true?{auto_pickup:$('autoPickup').checked}:{}),
-    goal:parseGoal({x:$('goalX').valueAsNumber,y:$('goalY').valueAsNumber,yaw_deg:$('goalYaw').valueAsNumber})});
+    ...(multiMode()?routeStartPayload(routeDraft,currentStatus?.control?.map_id,currentStatus?.capabilities?.waypoints):
+      {goal:parseGoal({x:$('goalX').valueAsNumber,y:$('goalY').valueAsNumber,yaw_deg:$('goalYaw').valueAsNumber})})});
+});
+$('navigationMode').addEventListener('change',updateControls);
+function saveRoute(next){
+  if(save(KEYS.route,JSON.stringify(next))){routeDraft=next;updateControls();}
+}
+$('addWaypoint').addEventListener('click',()=>{
+  if($('addWaypoint').disabled)return;
+  if(routeDraft.goals.length&&routeDraft.map_id!==loadedMapId){log('地图已切换，请清空点位后重新选择。',true);return;}
+  const goal=parseGoal({x:$('goalX').valueAsNumber,y:$('goalY').valueAsNumber,yaw_deg:$('goalYaw').valueAsNumber});
+  saveRoute({map_id:loadedMapId,goals:[...routeDraft.goals,goal]});
+});
+$('clearWaypoints').addEventListener('click',()=>{if(!$('clearWaypoints').disabled)saveRoute({map_id:loadedMapId||'waiting-for-map',goals:[]});});
+$('waypointList').addEventListener('click',event=>{
+  const button=event.target.closest('[data-waypoint-action]');if(!button||button.disabled)return;
+  const index=Number(button.dataset.index),goals=routeDraft.goals.map(goal=>({...goal}));
+  if(button.dataset.waypointAction==='remove')goals.splice(index,1);
+  else{const other=index+(button.dataset.waypointAction==='up'?-1:1);[goals[index],goals[other]]=[goals[other],goals[index]];}
+  saveRoute({...routeDraft,goals});
 });
 for(const name of ['pause','resume','reset','requestManual','releaseManual','stop']){
   $(name+'Button').addEventListener('click',()=>void submitOperation(name));
@@ -289,6 +353,10 @@ function abandonControl(reason){
 }
 window.addEventListener('blur',()=>abandonControl('导航页面失去焦点'));
 document.addEventListener('visibilitychange',()=>{if(document.hidden)abandonControl('导航页面进入后台');});
+try {
+  const savedRoute=read(KEYS.route);
+  if(savedRoute)routeDraft=parseRouteDraft(JSON.parse(savedRoute));
+} catch{log('已有多点草稿无法读取，请清空后重新选择。',true);}
 try {
   const saved = read(KEYS.goal);
   if (saved) {
