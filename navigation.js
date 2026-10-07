@@ -219,7 +219,7 @@ function renderStatus(data) {
   $('missionMode').textContent = s ? (s.mode === 'mock' ? '模拟' : '真实导航 / 模拟清理') : '—';
   if(actionDemo&&data.decision?.action_demo){
     const d=data.decision.action_demo;
-    const phases={IDLE:'待命',FORWARD:'前进中',WAIT_FORWARD_STOP:'前进后确认停车',BACKWARD:'后退中',WAIT_BACKWARD_STOP:'后退后确认停车',COMPLETE:'动作已完成',CANCELED:'动作已取消',FAULT:'动作故障'};
+    const phases={IDLE:'待命',WAIT_STOP:'动作前等待停车确认',FORWARD:'前进中',WAIT_FORWARD_STOP:'前进后确认停车',BACKWARD:'后退中',WAIT_BACKWARD_STOP:'后退后确认停车',COMPLETE:'动作已完成',CANCELED:'动作已取消',FAULT:'动作故障'};
     $('decisionStatus').textContent+=` 动作阶段：${phases[d.phase]||'等待动作反馈'}；已完成 ${d.action_count} 次。`
       +(Number.isFinite(d.forward_m)&&Number.isFinite(d.reverse_m)?` 前进 ${(d.forward_m*100).toFixed(1)} cm，后退 ${(d.reverse_m*100).toFixed(1)} cm。`:'')
       +(d.error?` 原因：${d.error}。`:'');
