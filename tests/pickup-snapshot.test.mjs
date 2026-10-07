@@ -26,12 +26,21 @@ test('temporary stop feedback rejection then same-frame success uses GET only', 
   assert.deepEqual(f.retries, [[2, 'STATIONARY_SNAPSHOT_REQUIRED']]);
 });
 
-test('camera startup and matching waits recover, but persistent movement is rejected after three reads', async () => {
+test('camera startup and matching waits recover, but persistent movement is rejected within the time budget', async () => {
   const f = fixture([{error:'CAMERA_INFO_NOT_READY'}, {error:'MATCHED_CAMERA_DETECTION_NOT_READY'}, {stationary:true}]);
   assert.equal((await getStationaryObservation('http://robot', f.options)).stationary, true);
-  const moving = fixture(Array.from({length:3}, () => ({error:'STATIONARY_SNAPSHOT_REQUIRED'})));
+  const moving = fixture(Array.from({length:32}, () => ({error:'STATIONARY_SNAPSHOT_REQUIRED'})));
   await assert.rejects(getStationaryObservation('http://robot', moving.options), /STATIONARY_SNAPSHOT_REQUIRED/);
-  assert.equal(moving.calls.length, 3);
+  assert.equal(moving.calls.length, 32);
+  assert.equal(moving.waits.reduce((a,b) => a+b,0),7750);
+});
+
+test('stop feedback recovering after more than three checks can still provide a verified snapshot', async () => {
+  const f = fixture([...Array.from({length:5}, () => ({error:'STATIONARY_SNAPSHOT_REQUIRED'})),
+    {stationary:true,source_stamp_ns:'456',boxes:[]}]);
+  assert.equal((await getStationaryObservation('http://robot', f.options)).source_stamp_ns,'456');
+  assert.equal(f.calls.length,6);
+  assert.ok(f.calls.every(c=>c.method==='GET'&&!c.body));
 });
 
 test('invalid configuration, authorization, and encoding errors are never retried', async () => {

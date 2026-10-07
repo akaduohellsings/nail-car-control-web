@@ -7,7 +7,7 @@ export async function getStationaryObservation(url, {
   wait = ms => new Promise(resolve => setTimeout(resolve, ms)), onRetry = () => {}
 } = {}) {
   const deadline = clock() + 8000;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; ; attempt++) {
     const remaining = deadline - clock();
     if (remaining <= 0) throw Error('SNAPSHOT_TIMEOUT');
     const response = await fetcher(url + '/api/v1/pickup/observation', {
@@ -17,7 +17,7 @@ export async function getStationaryObservation(url, {
     if (clock() >= deadline) throw Error('SNAPSHOT_TIMEOUT');
     if (response.ok) return data;
     const code = data.error || 'SNAPSHOT_REQUEST_FAILED';
-    if (!retryable.has(code) || attempt === 3 || deadline - clock() <= 250) throw Error(code);
+    if (!retryable.has(code) || deadline - clock() <= 250) throw Error(code);
     onRetry(attempt + 1, code);
     await wait(250);
   }

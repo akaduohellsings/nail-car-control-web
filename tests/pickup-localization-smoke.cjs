@@ -15,10 +15,10 @@ const fs=require('node:fs');const path=require('node:path');
    const request=route.request();requests.push({method:request.method(),url:request.url()});
    if(new URL(request.url()).origin!==base)return route.abort();return route.continue();
   });
-  let mode='ok',jpeg,initialStopPending=true;
+  let mode='ok',jpeg,initialStopPending=5;
   await page.route('**/api/v1/pickup/observation',route=>{
    requests.push({method:route.request().method(),url:route.request().url()});
-   if(mode==='moving'||initialStopPending){initialStopPending=false;return route.fulfill({status:409,json:{error:'STATIONARY_SNAPSHOT_REQUIRED'}});}
+   if(mode==='moving'||initialStopPending>0){if(initialStopPending>0)initialStopPending--;return route.fulfill({status:409,json:{error:'STATIONARY_SNAPSHOT_REQUIRED'}});}
    return route.fulfill({json:{schema_version:1,capture_id:'test-only',source_stamp_ns:'10000000000',source_age_seconds:.1,
       camera:draft.camera,boxes:[{u:320,v:240,width:20,height:10,confidence:.9}],stationary:true,
       image_jpeg_base64:jpeg,motion_command_sent:false,collection_confirmed:false}});
@@ -31,7 +31,7 @@ const fs=require('node:fs');const path=require('node:path');
    ctx.fillStyle='#23342b';ctx.fillRect(312,232,16,16);return c.toDataURL('image/jpeg').split(',')[1];});
   assert.equal(await page.textContent('#forwardDistance'),'—');
   await page.click('#captureButton');await page.waitForFunction(()=>document.getElementById('captureStatus').textContent.includes('已获取'));
-  assert.equal(requests.filter(r=>r.url.includes('/api/v1/pickup/observation')).length,2);
+  assert.equal(requests.filter(r=>r.url.includes('/api/v1/pickup/observation')).length,6);
   assert.equal(await page.locator('#targetSelect option').count(),2);
   const canvas=page.locator('#photo');
   async function clickPoint(p){const b=await canvas.boundingBox();await page.mouse.click(b.x+1+p.u/640*(b.width-2),b.y+1+p.v/480*(b.height-2));}

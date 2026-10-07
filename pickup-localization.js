@@ -1,7 +1,7 @@
 import {loadConfig} from './connection-config.js?v=20261006-video-network';
 import {installSettings} from './connection-settings.js?v=20261006-video-network';
 import {fitCalibration,locatePixel,cameraValid} from './pickup-geometry.js?v=20261007-static';
-import {getStationaryObservation} from './pickup-snapshot.js?v=20261007-snapshot-retry';
+import {getStationaryObservation} from './pickup-snapshot.js?v=20261007-snapshot-wait';
 const $=id=>document.getElementById(id),KEY='nail.pickup.groundCalibration.v1';
 let config=loadConfig(),observation=null,photo=null,selected=null,model=null,busy=false,generation=0;
 let draft={schema_version:1,camera:null,fit:[],checks:[],magnet:null,mount_note:''};
@@ -66,7 +66,7 @@ async function capture(){
   try{
     if(!config.navigationUrl)throw Error('请填写导航任务服务地址');
     const data=await getStationaryObservation(config.navigationUrl,{onRetry:attempt=>{
-      if(version===generation)message('captureStatus',`等待停车确认与同帧识别结果，正在重试（${attempt}/3）……`);
+      if(version===generation)message('captureStatus',`等待停车确认与同帧识别结果（第${attempt}次确认，最多等待8秒）……`);
     }});
     cameraValid(data.camera);if(data.schema_version!==1||data.stationary!==true||!Array.isArray(data.boxes)||!data.source_stamp_ns)throw Error('快照格式不完整');
     const image=new Image();image.src='data:image/jpeg;base64,'+data.image_jpeg_base64;await image.decode();
