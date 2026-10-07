@@ -47,5 +47,45 @@ class VideoReadinessTests(unittest.TestCase):
         for topic in ('/raw&topic=/other','/raw?type=png','%2Fraw','/raw\r\n','raw'):
             with self.assertRaises(ValueError):video_stream_url('http://robot:8080',topic)
 
+    def test_reconnects_when_topic_discovery_closes_first_stream(self):
+        from unittest.mock import patch
+        import io
+        from email.message import Message
+        frame=b'--frame\r\n\xff\xd8data\xff\xd9\r\n'
+        responses=[]
+        for body in (b'',frame*2):
+            response=io.BytesIO(body);response.headers=Message()
+            response.headers['Content-Type']='multipart/x-mixed-replace; boundary=frame'
+            responses.append(response)
+        from robot_web_stack import urllib
+        with patch.object(urllib.request,'build_opener') as opener:
+            opener.return_value.open.side_effect=responses
+            result=verify_video_streams(topics=('/detected_image',),timeout=1)
+            self.assertEqual(result['/detected_image'],2)
+            self.assertEqual(opener.return_value.open.call_count,2)
+
+    def test_single_frames_across_reconnections_do_not_satisfy_two_frame_gate(self):
+        frame=b'--frame\r\n\xff\xd8data\xff\xd9\r\n'
+        base=self.serve({'/stream?topic=/detected_image':frame})
+        with self.assertRaisesRegex(RuntimeError,'detected_image.*1/2'):
+            verify_video_streams(base,topics=('/detected_image',),timeout=.4)
+
+    def test_reconnects_after_connection_error_but_does_not_retry_service_failure(self):
+        from unittest.mock import patch,Mock
+        import io
+        from email.message import Message
+        from robot_web_stack import urllib
+        frame=b'--frame\r\n\xff\xd8data\xff\xd9\r\n'
+        response=io.BytesIO(frame*2);response.headers=Message()
+        response.headers['Content-Type']='multipart/x-mixed-replace; boundary=frame'
+        with patch.object(urllib.request,'build_opener') as opener:
+            opener.return_value.open.side_effect=[OSError('early connection closed'),response]
+            self.assertEqual(verify_video_streams(topics=('/detected_image',),timeout=1)['/detected_image'],2)
+        with patch.object(urllib.request,'build_opener') as opener:
+            check=Mock(side_effect=RuntimeError('yolo exited'))
+            with self.assertRaisesRegex(RuntimeError,'yolo exited'):
+                verify_video_streams(topics=('/detected_image',),timeout=1,check=check)
+            opener.return_value.open.assert_not_called()
+
 
 if __name__=='__main__':unittest.main()

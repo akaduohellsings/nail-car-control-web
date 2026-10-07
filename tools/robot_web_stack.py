@@ -27,42 +27,67 @@ def video_stream_url(base_url, topic):
 def verify_video_streams(base_url='http://127.0.0.1:8080',
                          topics=('/camera/color/image_raw', '/detected_image'),
                          timeout=8, check=lambda: None):
-    """Require two complete JPEG frames per topic through the actual HTTP path."""
+    """Require two JPEG frames on one connection; retry early stream closure.
+
+    The legacy server closes streams whose topic is not in its DDS graph yet.
+    A reconnect lets it discover the topic without bypassing video readiness.
+    """
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     counts = {}
     for topic in topics:
         url = video_stream_url(base_url, topic)
         deadline = time.monotonic() + timeout
-        pending = b''
-        count = 0
+        best_count = 0
+        last_error = None
         try:
-            check()
-            with opener.open(url, timeout=timeout) as response:
-                content_type = response.headers.get('Content-Type', '').lower()
-                if 'multipart/' not in content_type:
-                    raise RuntimeError('Expected MJPEG, received ' + content_type)
-                while count < 2 and time.monotonic() < deadline:
-                    check()
-                    chunk = response.read1(65536)
-                    if not chunk:
-                        break
-                    pending += chunk
-                    while True:
-                        start = pending.find(b'\xff\xd8')
-                        if start < 0:
-                            pending = pending[-1:]
-                            break
-                        pending = pending[start:]
-                        end = pending.find(b'\xff\xd9', 2)
-                        if end < 0:
-                            break
-                        count += 1
-                        pending = pending[end+2:]
-                    if len(pending) > 4 * 1024 * 1024:
-                        raise RuntimeError('Incomplete JPEG exceeds 4 MiB')
-                if count < 2:
-                    raise RuntimeError('Received ' + str(count) + '/2 complete JPEG frames')
-                counts[topic] = count
+            while time.monotonic() < deadline:
+                check()
+                pending = b''
+                count = 0
+                remaining = deadline-time.monotonic()
+                if remaining <= 0:
+                    break
+                try:
+                    with opener.open(url, timeout=min(2.,remaining)) as response:
+                        content_type = response.headers.get('Content-Type', '').lower()
+                        if 'multipart/' not in content_type:
+                            raise RuntimeError('Expected MJPEG, received ' + content_type)
+                        while count < 2 and time.monotonic() < deadline:
+                            check()
+                            chunk = response.read1(65536)
+                            if not chunk:
+                                break
+                            pending += chunk
+                            while True:
+                                start = pending.find(b'\xff\xd8')
+                                if start < 0:
+                                    pending = pending[-1:]
+                                    break
+                                pending = pending[start:]
+                                end = pending.find(b'\xff\xd9', 2)
+                                if end < 0:
+                                    break
+                                count += 1
+                                pending = pending[end+2:]
+                            if len(pending) > 4 * 1024 * 1024:
+                                raise RuntimeError('Incomplete JPEG exceeds 4 MiB')
+                except OSError as error:
+                    last_error = str(error)
+                best_count = max(best_count,count)
+                if count >= 2:
+                    counts[topic] = count
+                    break
+                # Keep service-health failures fatal; only retry HTTP closure
+                # and connection errors within the original topic deadline.
+                check()
+                remaining = deadline-time.monotonic()
+                if remaining > 0:
+                    time.sleep(min(.2,remaining))
+            if topic not in counts:
+                detail = 'Received ' + str(best_count) + '/2 complete JPEG frames'
+                if last_error:
+                    detail += '; last connection error: ' + last_error
+                raise RuntimeError(detail)
         except (OSError, ValueError, RuntimeError) as error:
             raise RuntimeError('VIDEO_NOT_READY ' + url + ': ' + str(error)) from error
     return counts
