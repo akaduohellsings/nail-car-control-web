@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>钉探 · 静止定位</title><link rel="stylesheet" href="topbar.css"><link rel="stylesheet" href="navigation.css?v=20261006-waypoints">
+<link rel="stylesheet" href="connection-settings.css?v=20261006-video-network"><link rel="stylesheet" href="pickup-localization.css?v=20261007-static"></head>
+<body><header class="topbar"><a class="brand" href="index.html"><span class="brand-mark">钉</span><strong>钉探<span>机器人控制台</span></strong></a>
+<nav aria-label="控制页面"><a href="index.html">手动控制</a><a href="navigation.html">导航控制</a><a href="pickup-localization.html" aria-current="page">静止定位</a></nav>
+<span class="topbar-spacer"></span><button class="button subtle" id="settingsButton">连接设置</button></header>
+<main><div class="page-heading"><div><span class="eyebrow">拾取重构 · 第一步</span><h1>钉子静止定位</h1>
+<p>先核对地面位置与磁铁覆盖范围。所有按钮只采集、计算或保存数据。</p></div></div>
+<section class="card"><div class="card-heading"><h2>1 · 获取停稳画面</h2><button class="button primary" id="captureButton">获取静止快照</button></div>
+<p>请先在导航页停止任务并等小车停稳，再进入本页。需要相机、YOLO和导航任务服务已启动。</p>
+<p id="connectionAddress"></p><p id="captureStatus" role="status">尚未获取画面</p>
+<div class="localization-grid"><div><canvas id="photo" width="640" height="480" aria-label="静止原始图像；点击选择标记或目标位置"></canvas>
+<p id="photoTime">快照为冻结画面，移动小车或物品后请重新获取。</p><p id="pixelText">点击画面选择一个像素点。</p></div>
+<div><p id="calibrationStatus" role="status">尚未标定</p>
+<label class="mount-confirm"><input id="mountConfirmed" type="checkbox"> 相机、磁铁安装及地面条件与本次标定一致</label>
+<label>识别目标 <select id="targetSelect"><option value="manual">手动选点（标记定位测试）</option></select></label>
+<dl class="status-grid"><div class="status-item"><dt>车体前方距离</dt><dd id="forwardDistance">—</dd></div>
+<div class="status-item"><dt>车体左右偏移</dt><dd id="lateralDistance">—</dd></div>
+<div class="status-item wide"><dt>磁铁对准偏差</dt><dd id="magnetError">—</dd></div>
+<div class="status-item wide"><dt>预计直行扫过</dt><dd id="sweepResult">尚未标定</dd></div></dl>
+<svg id="groundPreview" viewBox="0 0 360 260" aria-label="地面俯视示意：目标和磁铁扫过区域"></svg>
+<p id="targetStatus" role="status">距离需要实测地面标定；识别框中心仅作为地面位置近似。</p>
+<p>区域仅为几何覆盖估计，不代表路径无障碍或已成功吸附。</p></div></div></section>
+<section class="card"><div class="card-heading"><h2>2 · 地面标定</h2><button class="text-button" id="clearPoints">清空标记</button></div>
+<p>以车体坐标原点（base_link在地面的投影）为零点：X向前、Y向左。保持车和相机不动，用尺子量出标记坐标；在画面点击对应标记中心后添加。标定点应覆盖前后和左右范围。</p>
+<p>至少6个标定点；另选至少2个未参与拟合的独立核验点，放在标定区域内。可移动地面标记并重新拍照，小车必须保持不动。</p>
+<div class="point-form"><label>前方X（cm）<input id="pointX" type="number" min="0" max="300" step="0.1"></label>
+<label>左侧Y（cm，右侧负数）<input id="pointY" type="number" min="-200" max="200" step="0.1"></label>
+<button class="button subtle" id="addFit">加入标定点</button><button class="button subtle" id="addCheck">加入独立核验点</button></div>
+<div class="table-wrap"><table><thead><tr><th>用途</th><th>像素（u, v）</th><th>实测X / Y（cm）</th><th>操作</th></tr></thead><tbody id="pointRows"></tbody></table></div>
+<div class="point-form"><label>磁铁前方X（cm）<input id="magnetX" type="number" min="0" max="100" step="0.1"></label>
+<label>磁铁左侧Y（cm）<input id="magnetY" type="number" min="-50" max="50" step="0.1"></label>
+<label>有效吸附宽度（cm）<input id="magnetWidth" type="number" min="0.1" max="100" step="0.1"></label>
+<label>安装记录<input id="mountNote" maxlength="200" placeholder="相机位置、俯角；磁铁位置、离地高度"></label></div>
+<p>有效吸附宽度请实测，不直接采用磁铁外壳宽度。相机或磁铁移动、安装高度和地面条件变化后需要重新核验。</p>
+<div class="task-actions"><button class="button primary" id="saveCalibration">计算、核验并保存</button>
+<button class="button subtle" id="exportCalibration">导出标定</button><label class="button subtle">导入标定<input id="importCalibration" type="file" accept="application/json,.json" hidden></label></div>
+<p id="formStatus" role="status">尚未标定，不使用默认距离。</p></section>
+<footer>钉探 · 静止定位 <span>第一步：测量与核验 · 不执行拾取动作</span></footer></main>
+<script type="module" src="pickup-localization.js?v=20261007-static"></script></body></html>
