@@ -177,7 +177,7 @@ const video=createVideoMonitor({image:$('cameraImage'),onStatus:data=>{
   $('videoHint').textContent=data.error||hints[data.state]||'';
 }});
 const events=createEventMonitor({onStatus:data=>{
-  const labels={ONLINE:data.sourceFresh===true?'检测源数据新鲜':'检测接口可达 · 源时间未提供',STALE:'检测数据已过期',UNREACHABLE:'检测事件服务不可达'};
+  const labels={ONLINE:data.sourceFresh===true?'检测源数据新鲜':'检测接口可达 · 源时间未提供',STALE:'检测数据已过期',UNREACHABLE:'独立检测事件接口未连接；该接口与视频分开，导航识别反馈请查看任务状态。'};
   $('detectionStatus').textContent=labels[data.state];
   $('detectionStatus').title=data.receivedAt?'最近接收：'+new Date(data.receivedAt).toLocaleTimeString('zh-CN'):data.error||'';
   if(data.state!==lastEventState){addMessage('system',labels[data.state]);lastEventState=data.state;}
