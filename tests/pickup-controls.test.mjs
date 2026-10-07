@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parsePickupSpeeds,PICKUP_SPEED_POLICY} from '../pickup-speed.js';
-import {calibrationAgrees,pickupTestPayload,pickupTestBlockers} from '../pickup-test.js';
+import {calibrationAgrees,pickupTestPayload,pickupTestBlockers,createPickupReadyGate,parkingWaitText} from '../pickup-test.js';
 const fixture=()=>({camera:{camera_id:'fixture'},fit:[{u:320,v:240,x_m:.6,y_m:0}],checks:[{u:340,v:230,x_m:.7,y_m:.1}],magnet:{x_m:.125,y_m:0,width_m:.035}});
 test('pickup has independent default speeds and the navigation ceilings',()=>{
   assert.deepEqual(parsePickupSpeeds(.3,45),{linear_m_s:.3,angular_rad_s:Math.PI/4});
@@ -22,6 +22,19 @@ test('browser and server measured fit and magnet must agree before a test',()=>{
 const readyTest=()=>({status:{connection:'ONLINE',mission:{state:'IDLE'},control:{owner:'none'}},ready:true,posting:false,
   observation:{capture_id:'capture',pickup_calibration:{draft:fixture()}},fresh:true,used:null,selected:{u:320,v:240},
   model:{},mountConfirmed:true,conditions:true,agrees:true,speedValid:true});
+test('flapping readiness cannot enable pickup; losing parking evidence disables immediately',()=>{
+  const gate=createPickupReadyGate();
+  for(let t=0;t<3000;t+=200){assert.equal(gate.update(true,t),false);assert.equal(gate.update(false,t+100),false);}
+  assert.equal(gate.update(true,3000),false);assert.equal(gate.update(true,3999),false);
+  assert.equal(gate.update(true,4000),true);assert.equal(gate.update(false,4001),false);
+  assert.equal(gate.update(true,4002),false);
+  assert.match(pickupTestBlockers({...readyTest(),stableReady:false}).join(''),/连续稳定1秒/);
+});
+test('parking wait explains odometry replay and actual guard timeout separately',()=>{
+  assert.match(parkingWaitText({navigation:{parking_confirmation:{reason:'ODOM_REPLAY'}}}),/重复或乱序/);
+  assert.match(parkingWaitText({navigation:{parking_confirmation:{reason:'GUARD_FEEDBACK_STALE'}}}),/底盘保护反馈/);
+  assert.equal(parkingWaitText({}),'等待小车停车确认');
+});
 test('idle service explains every missing local preparation instead of only saying idle',()=>{
   const v=readyTest();assert.deepEqual(pickupTestBlockers(v),[]);
   Object.assign(v,{mountConfirmed:false,conditions:false,selected:null,agrees:false});

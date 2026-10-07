@@ -73,6 +73,17 @@ let s={schema_version:1,read_only:false,bridge_instance_id:'fixture',connection:
   await page.waitForFunction(()=>!document.getElementById('pickupTestButton').disabled);
   assert.equal(await page.textContent('#pickupTestBlockers'),'');
   assert.match(await page.textContent('#pickupTestStatus'),/已准备好/);
+  s.mission.stationary_confirmed=false;s.navigation.parking_confirmation={reason:'ODOM_REPLAY'};
+  await page.waitForFunction(()=>document.getElementById('pickupTestBlockers').textContent.includes('重复或乱序'));
+  assert.equal(await page.isDisabled('#pickupTestButton'),true);
+  s.mission.stationary_confirmed=true;
+  await page.waitForFunction(()=>document.getElementById('pickupTestBlockers').textContent.includes('连续稳定1秒'));
+  assert.equal(await page.isDisabled('#pickupTestButton'),true);
+  s.mission.stationary_confirmed=false;
+  await page.waitForFunction(()=>document.getElementById('pickupTestBlockers').textContent.includes('停车确认'));
+  assert.equal(await page.isDisabled('#pickupTestButton'),true);
+  s.mission.stationary_confirmed=true;
+  await page.waitForFunction(()=>!document.getElementById('pickupTestButton').disabled);
   assert.equal(commands.length,0);await page.click('#pickupTestButton');
   await page.waitForFunction(()=>document.getElementById('pickupTestStatus').textContent.includes('对准目标'));
   assert.equal(commands[0].command,'pickup_test');assert.equal(commands[0].capture_id,'capture-fixture');
