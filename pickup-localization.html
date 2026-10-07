@@ -10,7 +10,7 @@
 <p>先核对地面位置与磁铁覆盖范围。所有按钮只采集、计算或保存数据。</p></div></div>
 <section class="card"><div class="card-heading"><h2>1 · 获取停稳画面</h2><button class="button primary" id="captureButton">获取静止快照</button></div>
 <p>请先在导航页停止任务并等小车停稳，再进入本页。需要相机、YOLO和导航任务服务已启动。</p>
-<p id="connectionAddress"></p><p id="captureStatus" role="status">尚未获取画面</p>
+<p id="connectionAddress"></p><p id="captureStatus" role="status">点击“获取静止快照”拍摄照片；本页不会自动播放实时视频。</p>
 <div class="localization-grid"><div><canvas id="photo" width="640" height="480" aria-label="静止原始图像；点击选择标记或目标位置"></canvas>
 <p id="photoTime">快照为冻结画面，移动小车或物品后请重新获取。</p><p id="pixelText">点击画面选择一个像素点。</p></div>
 <div><p id="calibrationStatus" role="status">尚未标定</p>
@@ -39,4 +39,4 @@
 <button class="button subtle" id="exportCalibration">导出标定</button><label class="button subtle">导入标定<input id="importCalibration" type="file" accept="application/json,.json" hidden></label></div>
 <p id="formStatus" role="status">尚未标定，不使用默认距离。</p></section>
 <footer>钉探 · 静止定位 <span>第一步：测量与核验 · 不执行拾取动作</span></footer></main>
-<script type="module" src="pickup-localization.js?v=20261007-static"></script></body></html>
+<script type="module" src="pickup-localization.js?v=20261007-snapshot-retry"></script></body></html>

@@ -1,6 +1,7 @@
 import {loadConfig} from './connection-config.js?v=20261006-video-network';
 import {installSettings} from './connection-settings.js?v=20261006-video-network';
 import {fitCalibration,locatePixel,cameraValid} from './pickup-geometry.js?v=20261007-static';
+import {getStationaryObservation} from './pickup-snapshot.js?v=20261007-snapshot-retry';
 const $=id=>document.getElementById(id),KEY='nail.pickup.groundCalibration.v1';
 let config=loadConfig(),observation=null,photo=null,selected=null,model=null,busy=false,generation=0;
 let draft={schema_version:1,camera:null,fit:[],checks:[],magnet:null,mount_note:''};
@@ -64,8 +65,9 @@ async function capture(){
   message('captureStatus','获取同一帧图像和识别结果……');
   try{
     if(!config.navigationUrl)throw Error('请填写导航任务服务地址');
-    const response=await fetch(config.navigationUrl+'/api/v1/pickup/observation',{cache:'no-store',signal:AbortSignal.timeout(5000)});
-    const data=await response.json();if(!response.ok){const reasons={NOT_FOUND:'服务尚未支持静止定位，请完整重启加载新版',STATIONARY_SNAPSHOT_REQUIRED:'小车尚未确认停稳或仍有任务，请先停止任务',CAMERA_INFO_NOT_READY:'等待相机参数，请确认已完整启动新版服务',MATCHED_CAMERA_DETECTION_NOT_READY:'没有新鲜的同帧图像和识别结果，请稍后重试',SNAPSHOT_ENCODING_UNAVAILABLE:'小车图像编码组件不可用'};throw Error(reasons[data.error]||data.error||'服务尚未支持静止定位，请完整重启加载新版');}
+    const data=await getStationaryObservation(config.navigationUrl,{onRetry:attempt=>{
+      if(version===generation)message('captureStatus',`等待停车确认与同帧识别结果，正在重试（${attempt}/3）……`);
+    }});
     cameraValid(data.camera);if(data.schema_version!==1||data.stationary!==true||!Array.isArray(data.boxes)||!data.source_stamp_ns)throw Error('快照格式不完整');
     const image=new Image();image.src='data:image/jpeg;base64,'+data.image_jpeg_base64;await image.decode();
     if(image.naturalWidth!==data.camera.width||image.naturalHeight!==data.camera.height)throw Error('画面尺寸与相机参数不一致');
@@ -77,7 +79,10 @@ async function capture(){
     message('captureStatus',`已获取停稳快照：${data.boxes.length} 个钉子候选。移动小车或物品后重新拍照。`);
     if(draft.camera&&draft.camera.camera_id!==data.camera.camera_id)invalidate();
     draw();updateLocation();
-  }catch(error){if(version===generation)message('captureStatus','未获取：'+error.message);}
+  }catch(error){
+    const reasons={NOT_FOUND:'服务尚未支持静止定位，请完整重启加载新版',STATIONARY_SNAPSHOT_REQUIRED:'小车尚未确认停稳或仍有任务，请先停止任务，停稳后重新获取',CAMERA_INFO_NOT_READY:'等待相机参数，请确认已完整启动新版服务',MATCHED_CAMERA_DETECTION_NOT_READY:'没有新鲜的同帧图像和识别结果，请稍后重试',SNAPSHOT_ENCODING_UNAVAILABLE:'小车图像编码组件不可用',SERVICE_STARTING:'任务服务正在启动，请稍后重试',SNAPSHOT_TIMEOUT:'获取快照超时，请检查任务服务连接'};
+    if(version===generation)message('captureStatus','未获取：'+(error.name==='TimeoutError'?reasons.SNAPSHOT_TIMEOUT:reasons[error.message]||error.message));
+  }
   finally{busy=false;$('captureButton').disabled=false;}
 }
 $('photo').addEventListener('click',event=>{
