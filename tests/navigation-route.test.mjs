@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseRouteDraft,routeStartPayload,routeProgress,routeActive} from '../navigation-route.js';
+import {parseRouteDraft,routeStartPayload,routeProgress,routeActive,navigationArrived} from '../navigation-route.js';
 import {controlPolicy,validateEnvelope,createNavigationApi} from '../navigation-api.js';
 
 const goals=[{x:.4,y:0,yaw_deg:0},{x:.4,y:.4,yaw_deg:90}];
@@ -10,6 +10,18 @@ const status=()=>({schema_version:1,read_only:false,bridge_instance_id:'bridge',
  mission:{schema_version:1,mode:'nav2_with_mock_cleaning',source_instance_id:'node',sequence:1,observed_at_ros_ns:'1',state:'IDLE',saved_goal:goals[0],target_event_id:null,
  attempt:0,max_attempts:3,alarm:null,pending:null,cleaning_mode:'mock',stationary_confirmed:true,halt_state:'NONE',owned_goal_id:null,goal_response_pending:false,action_server_ready:true},
  control:{schema_version:1,control_epoch:0,owner:'none',phase:'READY',controller_id:'page',map_id:'map',localization_valid:true,lease_remaining_seconds:3,manual_direction:'stop',command_result:null,route:null}});
+
+test('already-at-goal completion is displayed after a confirmed prior stop, never from an old receipt',()=>{
+ const d=status();assert.equal(navigationArrived(d),true);
+ d.mission.halt_state='CONFIRMED';assert.equal(navigationArrived(d),false);
+ d.navigation={goal_completion:{source:'stationary_pose',goal:{...d.mission.saved_goal}}};
+ assert.equal(navigationArrived(d),true);
+ for(const change of [v=>v.mission.stationary_confirmed=false,v=>v.mission.state='NAV_STARTING',
+  v=>v.mission.saved_goal=null,v=>v.mission.owned_goal_id='active',v=>v.mission.goal_response_pending=true,
+  v=>v.navigation.goal_completion.goal.x+=.1,v=>v.mission.halt_state='VERIFYING_STOP']){
+  const copy=structuredClone(d);change(copy);assert.equal(navigationArrived(copy),false);
+ }
+});
 
 test('route drafts keep order, numbers and map identity without aliasing',()=>{
  const value={map_id:'map',goals};const draft=parseRouteDraft(value);

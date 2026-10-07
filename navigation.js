@@ -3,7 +3,7 @@ import {loadConfig} from './connection-config.js?v=20261006-video-network';
 import {installSettings} from './connection-settings.js?v=20261006-manual';
 import { createNavigationApi, controlPolicy } from './navigation-api.js?v=20261006-action-demo';
 import {createMapView} from './navigation-map.js?v=20261006-waypoints';
-import {MAX_WAYPOINTS,parseRouteDraft,routeStartPayload,routeActive,routeProgress} from './navigation-route.js';
+import {MAX_WAYPOINTS,parseRouteDraft,routeStartPayload,routeActive,routeProgress,navigationArrived} from './navigation-route.js?v=20261007-goal-edges';
 import {parseSpeedInputs,parseSpeedDraft,speedText} from './navigation-speed.js';
 
 const $ = (id) => document.getElementById(id);
@@ -215,7 +215,7 @@ function renderStatus(data) {
   }
   if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent=decisionEnabled?(actionDemo?'真实导航 / 识别动作测试':'真实导航 / 模拟拾取'):(c?.route?'真实多点导航':'真实单点导航');
   if(data.capabilities?.preview)$('missionMode').textContent='导航接口预览（模拟）';
-  const arrived=s?.state==='IDLE'&&s.saved_goal&&s.halt_state==='NONE'&&s.owned_goal_id===null&&s.goal_response_pending===false&&s.stationary_confirmed===true;
+  const arrived=navigationArrived(data);
   const decisionPhase=decisionEnabled?(actionDemo?{CLEANING:'识别动作测试中',VERIFYING:'确认动作与停车'}:{CLEANING:'模拟拾取中',VERIFYING:'模拟复查中'})[s?.state]:null;
   $('missionState').textContent = s ? ((arrived?'已到达':decisionPhase||stateLabels[s.state]) + (online ? '' : '（最后状态）')) : '—';
   if(c?.route?.state==='WAITING_STOP')$('missionState').textContent='点位已到达，等待停车确认';

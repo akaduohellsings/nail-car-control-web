@@ -1,5 +1,14 @@
 export const MAX_WAYPOINTS = 20;
 export const routeActive = route => ['RUNNING','WAITING_STOP','PAUSED'].includes(route?.state);
+export function navigationArrived(data) {
+  const s=data?.mission;
+  if(s?.state!=='IDLE'||!s.saved_goal||s.owned_goal_id!==null
+    ||s.goal_response_pending!==false||s.stationary_confirmed!==true)return false;
+  if(s.halt_state==='NONE')return true;
+  const completion=data.navigation?.goal_completion;
+  return s.halt_state==='CONFIRMED'&&completion?.source==='stationary_pose'
+    &&['x','y','yaw_deg'].every(key=>Number.isFinite(completion.goal?.[key])&&completion.goal[key]===s.saved_goal[key]);
+}
 export function parseRouteDraft(value) {
   if (!value || typeof value.map_id !== 'string' || !value.map_id || !Array.isArray(value.goals)
       || value.goals.length > MAX_WAYPOINTS) throw new Error('多点草稿格式错误');
