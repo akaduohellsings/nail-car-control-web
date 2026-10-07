@@ -143,7 +143,7 @@ function renderStatus(data) {
   $('connectionText').textContent = connectionLabels[data.connection] || '状态未知';
   document.querySelector('.connection i').style.background = online ? '#6cbd9c' : '#d5ad62';
   $('taskBadge').textContent = online ? '实时' : (data.connection === 'STALE' ? '已过期' : '未确认');
-  $('modeNotice').textContent = s ? (s.mode === 'mock' ? '模拟任务 · 只读' : s.cleaning_mode==='motion_demo'?'导航与识别动作测试 · 按勾选开关启用':s.cleaning_mode==='image_pickup'?'真实导航与拾取 · 按勾选开关启用':'真实导航适配 · 清理模拟') : '只读状态';
+  $('modeNotice').textContent = s ? (s.mode === 'mock' ? '模拟任务 · 只读' : s.cleaning_mode==='motion_demo'?'导航与识别动作测试 · 按勾选开关启用':'真实导航适配 · 清理模拟') : '只读状态';
   const c=data.control;
   if(online&&(!data.navigation?.map_id||data.navigation.map_id==='waiting-for-map')){
     loadedMapId=null;mapView.clear();
@@ -189,13 +189,10 @@ function renderStatus(data) {
     showResult(c.command_result);
   }
   const decisionEnabled=online&&data.decision?.auto_pickup_enabled===true;
-  const realPickup=data.capabilities?.auto_pickup?.cleaning_mode==='image_pickup';
   const actionDemo=data.capabilities?.auto_pickup?.cleaning_mode==='motion_demo';
-  $('autoPickupLabel').textContent=actionDemo?'导航时识别钉子并测试动作（前进 10 cm → 后退 10 cm）':realPickup?'导航时检测钉子并执行真实拾取（车头磁铁 · 28 cm）':'导航时检测钉子并暂停处理（模拟拾取）';
+  $('autoPickupLabel').textContent=actionDemo?'导航时识别钉子并测试动作（前进 10 cm → 后退 10 cm）':'导航时检测钉子并暂停处理（模拟拾取）';
   $('decisionStatus').textContent=actionDemo
     ?(decisionEnabled?'本次已启用：识别 → 停车 → 前进 10 cm → 停车 → 后退 10 cm → 停车 → 恢复原目标。':'勾选后，下一次导航会在识别钉子后测试前进、后退动作。')+' 动作速度 0.04 米/秒；仅验证流程，收集未确认。'
-    :realPickup
-    ?(decisionEnabled?'本次已启用：检测 → 停车 → 对准接近 → 前进 28 cm → 停车 → 恢复原目标。':'勾选后，下一次导航会触发真实拾取动作。')+' 拾取速度上限 0.04 m/s；实际吸附需现场确认。'
     :decisionEnabled?'本次已启用：检测 → 停车 → 模拟拾取 → 恢复原目标；收集未确认。'
     :data.capabilities?.auto_pickup?.supported===true?'下一次开始导航可启用检测决策；本轮拾取与复查均为模拟。':'当前服务未开放检测决策；本轮不执行真实拾取。';
   if(decisionEnabled&&data.decision.detection){
@@ -208,14 +205,6 @@ function renderStatus(data) {
       +(d.nail_confidence==null?'':`，置信度 ${(d.nail_confidence*100).toFixed(0)}%`)
       +(d.source_frame_age_seconds==null?'':`，帧龄 ${d.source_frame_age_seconds.toFixed(2)} 秒`)+ '。';
   }
-  if(realPickup&&data.decision?.pickup){
-    const p=data.decision.pickup;
-    const phases={IDLE:'待命',WAIT_TARGET:'等待稳定目标',ARMING:'确认拾取接管',MOVING:'执行拾取',CLEANUP_ACK:'确认清理行程',
-      RELEASING:'归还控制权',OBSERVING:'观察目标',TURNING:'对准目标',APPROACHING:'接近目标',READY_TO_CLEAR:'准备清理',
-      CLEARING:'前进清理',STOPPING:'确认停车',DONE:'动作完成'};
-    const stage=p.phase==='IDLE'?'待命':phases[p.controller_state]||phases[p.phase]||'执行拾取';
-    $('decisionStatus').textContent+=` 拾取阶段：${stage}；已完成动作 ${p.action_count} 次。`+(p.error?` 原因：${p.error}。`:'');
-  }
   $('missionMode').textContent = s ? (s.mode === 'mock' ? '模拟' : '真实导航 / 模拟清理') : '—';
   if(actionDemo&&data.decision?.action_demo){
     const d=data.decision.action_demo;
@@ -224,10 +213,10 @@ function renderStatus(data) {
       +(Number.isFinite(d.forward_m)&&Number.isFinite(d.reverse_m)?` 前进 ${(d.forward_m*100).toFixed(1)} cm，后退 ${(d.reverse_m*100).toFixed(1)} cm。`:'')
       +(d.error?` 原因：${d.error}。`:'');
   }
-  if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent=decisionEnabled?(actionDemo?'真实导航 / 识别动作测试':realPickup?'真实导航 / 真实拾取':'真实导航 / 模拟拾取'):(c?.route?'真实多点导航':'真实单点导航');
+  if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent=decisionEnabled?(actionDemo?'真实导航 / 识别动作测试':'真实导航 / 模拟拾取'):(c?.route?'真实多点导航':'真实单点导航');
   if(data.capabilities?.preview)$('missionMode').textContent='导航接口预览（模拟）';
   const arrived=s?.state==='IDLE'&&s.saved_goal&&s.halt_state==='NONE'&&s.owned_goal_id===null&&s.goal_response_pending===false&&s.stationary_confirmed===true;
-  const decisionPhase=decisionEnabled?(actionDemo?{CLEANING:'识别动作测试中',VERIFYING:'确认动作与停车'}:realPickup?{CLEANING:'真实拾取中',VERIFYING:'核对动作与停车'}:{CLEANING:'模拟拾取中',VERIFYING:'模拟复查中'})[s?.state]:null;
+  const decisionPhase=decisionEnabled?(actionDemo?{CLEANING:'识别动作测试中',VERIFYING:'确认动作与停车'}:{CLEANING:'模拟拾取中',VERIFYING:'模拟复查中'})[s?.state]:null;
   $('missionState').textContent = s ? ((arrived?'已到达':decisionPhase||stateLabels[s.state]) + (online ? '' : '（最后状态）')) : '—';
   if(c?.route?.state==='WAITING_STOP')$('missionState').textContent='点位已到达，等待停车确认';
   if(c?.route?.state==='PAUSED')$('missionState').textContent='多点任务已暂停';

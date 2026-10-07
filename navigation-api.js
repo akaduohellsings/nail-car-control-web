@@ -16,8 +16,8 @@ export function validateEnvelope(data) {
   const s = data.mission;
   if (s !== null) {
     if (!s || Object.keys(s).length !== statusFields.length || statusFields.some(key => !(key in s))
-        || s.schema_version !== 1 || !['mock','nav2_with_mock_cleaning','nav2_with_image_pickup','nav2_with_motion_demo'].includes(s.mode)
-        || !states.includes(s.state) || !['mock','image_pickup','motion_demo'].includes(s.cleaning_mode)
+        || s.schema_version !== 1 || !['mock','nav2_with_mock_cleaning','nav2_with_motion_demo'].includes(s.mode)
+        || !states.includes(s.state) || !['mock','motion_demo'].includes(s.cleaning_mode)
         || typeof s.source_instance_id !== 'string' || !s.source_instance_id
         || typeof s.observed_at_ros_ns !== 'string' || !/^\d+$/.test(s.observed_at_ros_ns)
         || ['sequence','attempt','max_attempts'].some(key => !Number.isSafeInteger(s[key]) || s[key] < 0)
@@ -68,7 +68,7 @@ export function validateEnvelope(data) {
   if (data.read_only === false) {
     const c = data.control, cap = data.capabilities;
     const simulation=cap?.environment==='local_simulation' && s?.mode==='mock';
-    const robot=cap?.environment==='robot_navigation' && ['nav2_with_mock_cleaning','nav2_with_image_pickup','nav2_with_motion_demo'].includes(s?.mode)
+    const robot=cap?.environment==='robot_navigation' && ['nav2_with_mock_cleaning','nav2_with_motion_demo'].includes(s?.mode)
       && Array.isArray(cap.commands) && new Set(cap.commands).size===cap.commands.length
       && ((cap.commands.length===5&&manualCap?.supported!==true)
         ||(manualCap!==undefined&&cap.commands.length===8&&['request_manual','release_manual','manual_intent'].every(command=>cap.commands.includes(command))))
@@ -102,7 +102,7 @@ export function controlPolicy(data, sessionId, locallyAllowed = true) {
   const available=locallyAllowed && data?.connection==='ONLINE' && data?.read_only===false
     && data.capabilities?.control_enabled===true
     && ((data.capabilities.environment==='local_simulation'&&s?.mode==='mock')
-      || (data.capabilities.environment==='robot_navigation'&&['nav2_with_mock_cleaning','nav2_with_image_pickup','nav2_with_motion_demo'].includes(s?.mode)));
+      || (data.capabilities.environment==='robot_navigation'&&['nav2_with_mock_cleaning','nav2_with_motion_demo'].includes(s?.mode)));
   const simulation=data?.capabilities?.environment==='local_simulation';
   const manualSupported=simulation || (data?.capabilities?.manual_control?.supported===true
     && ['request_manual','release_manual','manual_intent'].every(command=>data.capabilities.commands?.includes(command)));

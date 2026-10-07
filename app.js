@@ -39,7 +39,7 @@ function status(text,level='yellow'){
 function policy(){return controlPolicy(task,api.sessionId,api.controlAvailable);}
 function navigationBlocksStandalone(){
   return task?.connection==='ONLINE' && task.mission &&
-    (['nav2_with_mock_cleaning','nav2_with_image_pickup','nav2_with_motion_demo'].includes(task.mission.mode) || task.mission.state!=='IDLE' ||
+    (['nav2_with_mock_cleaning','nav2_with_motion_demo'].includes(task.mission.mode) || task.mission.state!=='IDLE' ||
       task.control?.owner==='automatic' || task.control?.owner==='manual' || task.control?.owner==='blocked');
 }
 function canMove(direction){
@@ -80,7 +80,7 @@ function renderTask(data){
     pending=null;$('controlFeedback').textContent='服务已重启，上一操作结果未确认。';
   }
   const s=data.mission, online=data.connection==='ONLINE';
-  const mode=s?(s.mode==='mock'?'模拟任务':s.cleaning_mode==='image_pickup'?'真实导航与拾取':'真实导航'):'';
+  const mode=s?(s.mode==='mock'?'模拟任务':'真实导航'):'';
   $('taskSummary').textContent=(connectionLabels[data.connection]||'状态未知')+
     (s?` · ${mode} · ${stateLabels[s.state]}${online?'':'（最后状态）'}`:'');
   $('taskSummary').title=online?`停车确认：${s.stationary_confirmed===true?'已确认':'未确认'}`:'数据不可用，停车未确认';
