@@ -2,9 +2,13 @@ import {loadConfig} from './connection-config.js?v=20261006-video-network';
 import {installSettings} from './connection-settings.js?v=20261006-video-network';
 import {fitCalibration,locatePixel,cameraValid} from './pickup-geometry.js?v=20261007-static';
 import {getStationaryObservation} from './pickup-snapshot.js?v=20261007-snapshot-wait';
+import {installPickupSpeeds} from './pickup-speed.js?v=20261007-calibrated-pickup';
+import {installPickupTest} from './pickup-test.js?v=20261007-calibrated-pickup';
 const $=id=>document.getElementById(id),KEY='nail.pickup.groundCalibration.v1';
 let config=loadConfig(),observation=null,photo=null,selected=null,model=null,busy=false,generation=0;
 let draft={schema_version:1,camera:null,fit:[],checks:[],magnet:null,mount_note:''};
+let pickupUI=null;
+const pickupSpeeds=installPickupSpeeds(()=>pickupUI?.refresh());
 function message(id,text){$(id).textContent=text;}
 function address(){message('connectionAddress','任务服务：'+(config.navigationUrl||'请填写连接设置'));}
 function number(id){const value=$(id).value.trim();if(!value)throw Error('请填写全部实测数据');const n=Number(value);if(!Number.isFinite(n))throw Error('数值格式错误');return n;}
@@ -56,6 +60,7 @@ function updateLocation(){
     message('sweepResult',p.forward_to_magnet_m<0?'目标已在磁铁后方':p.in_straight_sweep?'在预计直行扫过带内':'在预计直行扫过带外，需要对准');
     message('targetStatus',`${selected.kind==='nail'?'识别框中心地面位置近似':'手动标记位置测试'}；到磁铁横线还差 ${cm(p.forward_to_magnet_m)} cm。仅为冻结快照估计，吸附未确认。`);preview(p);
   }catch(error){message('sweepResult','暂不可估算');message('targetStatus',error.message);}
+  pickupUI?.refresh();
 }
 async function capture(){
   if(busy)return;busy=true;$('captureButton').disabled=true;const version=++generation;
@@ -114,7 +119,16 @@ $('importCalibration').addEventListener('change',async event=>{try{
   const next=JSON.parse(await file.text()),fitted=fitCalibration(next);localStorage.setItem(KEY,JSON.stringify(next));draft=next;model=fitted;$('mountConfirmed').checked=false;fillDraft();draw();updateLocation();
   message('calibrationStatus','已导入并重新核验；请获取当前快照、确认安装条件');message('formStatus','导入完成。');
 }catch(error){message('formStatus','未导入：'+error.message);}finally{event.target.value='';}});
-installSettings($('settingsButton'),next=>{config=next;generation++;observation=null;photo=null;selected=null;$('mountConfirmed').checked=false;address();draw();updateLocation();message('captureStatus','连接设置已更新，请重新获取画面。');});
+installSettings($('settingsButton'),next=>{config=next;generation++;observation=null;photo=null;selected=null;$('mountConfirmed').checked=false;pickupUI.connect(config.navigationUrl);address();draw();updateLocation();message('captureStatus','连接设置已更新，请重新获取画面。');});
 try{const saved=localStorage.getItem(KEY);if(saved){const next=JSON.parse(saved),fitted=fitCalibration(next);draft=next;model=fitted;message('calibrationStatus','已载入标定，请获取当前快照并核对安装条件');}}
 catch(error){message('formStatus','已有标定无法使用：'+error.message);}
+$('loadServiceCalibration').addEventListener('click',()=>{try{
+  const next=observation?.pickup_calibration?.draft,fitted=fitCalibration(next);localStorage.setItem(KEY,JSON.stringify(next));
+  draft=structuredClone(next);model=fitted;$('mountConfirmed').checked=false;fillDraft();draw();updateLocation();
+  message('calibrationStatus','已载入任务服务的标定，请重新确认安装条件');
+}catch(e){message('formStatus',e.message);}});
+pickupUI=installPickupTest({baseUrl:config.navigationUrl,speeds:pickupSpeeds,
+  context:()=>({observation,selected,model,draft:readDraftSafe(),mountConfirmed:$('mountConfirmed').checked}),
+  onStarted:()=>{$('pickupTestConditions').checked=false;}});
+function readDraftSafe(){try{return readDraft();}catch{return null;}}
 address();fillDraft();updateLocation();

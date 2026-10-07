@@ -1,7 +1,8 @@
 import {stateLabels, connectionLabels} from './task-labels.js';
 import {loadConfig} from './connection-config.js?v=20261006-video-network';
 import {installSettings} from './connection-settings.js?v=20261006-manual';
-import { createNavigationApi, controlPolicy } from './navigation-api.js?v=20261006-action-demo';
+import { createNavigationApi, controlPolicy } from './navigation-api.js?v=20261007-calibrated-pickup';
+import {installPickupSpeeds} from './pickup-speed.js?v=20261007-calibrated-pickup';
 import {createMapView} from './navigation-map.js?v=20261006-waypoints';
 import {MAX_WAYPOINTS,parseRouteDraft,routeStartPayload,routeActive,routeProgress,navigationArrived} from './navigation-route.js?v=20261007-goal-edges';
 import {parseSpeedInputs,parseSpeedDraft,speedText} from './navigation-speed.js';
@@ -37,6 +38,8 @@ function parseGoal(value) {
   return goal;
 }
 let lastFeedback = '', currentStatus=null, pendingUi=null, manualHold=null, manualTimer=null;
+const pickupSpeeds=installPickupSpeeds(updateControls);
+function validPickupSpeeds(){return !$('autoPickup').checked||currentStatus?.mission?.cleaning_mode!=='calibrated_pickup'||pickupSpeeds.valid();}
 let loadedMapId=null,mapLoading=false;
 const mapView=createMapView(document.querySelector('.map-stage'),point=>{
   $('goalX').value=point.x.toFixed(3);$('goalY').value=point.y.toFixed(3);
@@ -103,12 +106,16 @@ function renderSpeeds(){
 }
 function updateControls(){
   renderSpeeds();
+  const calibrated=currentStatus?.mission?.cleaning_mode==='calibrated_pickup';
+  $('pickupSpeedSettings').hidden=!calibrated;
+  pickupSpeeds.update(currentStatus?.capabilities?.auto_pickup?.speed_limits,
+    !!pendingUi||!['IDLE','PAUSED','FAULT'].includes(currentStatus?.mission?.state??'IDLE'));
   renderRoute();
   $('autoPickup').disabled=currentStatus?.connection!=='ONLINE'||currentStatus?.capabilities?.auto_pickup?.supported!==true
     || !['IDLE','PAUSED','FAULT'].includes(currentStatus?.mission?.state)||!!pendingUi;
   const p=controlPolicy(currentStatus,api.sessionId,api.controlAvailable);
   for(const action of ['start','pause','resume','reset','requestManual','releaseManual','stop']){
-    $(action+'Button').disabled=!p[action] || (action!=='stop'&&!!pendingUi) || (action==='start'&&(!(multiMode()?routeReady():validInputs())||!validSpeeds()||!currentStatus?.capabilities?.speed_limits));
+    $(action+'Button').disabled=!p[action] || (action!=='stop'&&!!pendingUi) || (action==='start'&&(!(multiMode()?routeReady():validInputs())||!validSpeeds()||!validPickupSpeeds()||!currentStatus?.capabilities?.speed_limits));
   }
   for(const button of document.querySelectorAll('[data-direction]'))button.disabled=!p.manualIntent||!!pendingUi;
   if(!p.manualIntent&&manualHold)stopManual(false);
@@ -143,7 +150,7 @@ function renderStatus(data) {
   $('connectionText').textContent = connectionLabels[data.connection] || '状态未知';
   document.querySelector('.connection i').style.background = online ? '#6cbd9c' : '#d5ad62';
   $('taskBadge').textContent = online ? '实时' : (data.connection === 'STALE' ? '已过期' : '未确认');
-  $('modeNotice').textContent = s ? (s.mode === 'mock' ? '模拟任务 · 只读' : s.cleaning_mode==='motion_demo'?'导航与识别动作测试 · 按勾选开关启用':'真实导航适配 · 清理模拟') : '只读状态';
+  $('modeNotice').textContent = s ? (s.mode === 'mock' ? '模拟任务 · 只读' : s.cleaning_mode==='calibrated_pickup'?'真实导航与磁铁拾取 · 按勾选开关启用':s.cleaning_mode==='motion_demo'?'导航与识别动作测试 · 按勾选开关启用':'真实导航适配 · 清理模拟') : '只读状态';
   const c=data.control;
   if(online&&(!data.navigation?.map_id||data.navigation.map_id==='waiting-for-map')){
     loadedMapId=null;mapView.clear();
@@ -190,8 +197,12 @@ function renderStatus(data) {
   }
   const decisionEnabled=online&&data.decision?.auto_pickup_enabled===true;
   const actionDemo=data.capabilities?.auto_pickup?.cleaning_mode==='motion_demo';
-  $('autoPickupLabel').textContent=actionDemo?'导航时识别钉子并测试动作（前进 10 cm → 后退 10 cm）':'导航时检测钉子并暂停处理（模拟拾取）';
-  $('decisionStatus').textContent=actionDemo
+  const calibrated=data.capabilities?.auto_pickup?.cleaning_mode==='calibrated_pickup';
+  if(calibrated)$('modeNotice').textContent='地图导航与磁铁拾取 · 拾取按勾选开关启用';
+  $('autoPickupLabel').textContent=calibrated?'导航时识别钉子并执行磁铁拾取':actionDemo?'导航时识别钉子并测试动作（前进 10 cm → 后退 10 cm）':'导航时检测钉子并暂停处理（模拟拾取）';
+  $('decisionStatus').textContent=calibrated
+    ?(decisionEnabled?'已启用：识别 → 停车定位 → 对准 → 磁铁通过 → 停车 → 恢复原导航。':'勾选后，下一次导航会按服务保存的地面标定执行拾取。')+' 吸附结果需现场确认。'
+    :actionDemo
     ?(decisionEnabled?'本次已启用：识别 → 停车 → 前进 10 cm → 停车 → 后退 10 cm → 停车 → 恢复原目标。':'勾选后，下一次导航会在识别钉子后测试前进、后退动作。')+' 动作速度 0.04 米/秒；仅验证流程，收集未确认。'
     :decisionEnabled?'本次已启用：检测 → 停车 → 模拟拾取 → 恢复原目标；收集未确认。'
     :data.capabilities?.auto_pickup?.supported===true?'下一次开始导航可启用检测决策；本轮拾取与复查均为模拟。':'当前服务未开放检测决策；本轮不执行真实拾取。';
@@ -213,10 +224,15 @@ function renderStatus(data) {
       +(Number.isFinite(d.forward_m)&&Number.isFinite(d.reverse_m)?` 前进 ${(d.forward_m*100).toFixed(1)} cm，后退 ${(d.reverse_m*100).toFixed(1)} cm。`:'')
       +(d.error?` 原因：${d.error}。`:'');
   }
-  if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent=decisionEnabled?(actionDemo?'真实导航 / 识别动作测试':'真实导航 / 模拟拾取'):(c?.route?'真实多点导航':'真实单点导航');
+  if(calibrated&&data.decision?.pickup){
+    const p=data.decision.pickup,phases={IDLE:'待命',WAIT_STOP:'等待停稳',REOBSERVE:'停稳后定位',ALIGN:'对准目标',WAIT_ALIGN_STOP:'转向后停车',APPROACH:'接近并通过钉子',WAIT_FINAL_STOP:'确认停车',COMPLETE:'动作完成',SKIPPED:'已跳过目标',FAULT:'拾取故障',CANCELED:'已取消'};
+    $('decisionStatus').textContent+=` 拾取阶段：${phases[p.phase]||'等待反馈'}。`+(p.error||p.skip_reason?` 原因：${p.error||p.skip_reason}。`:'');
+    if(data.decision.pickup_speed_limits)$('decisionStatus').textContent+=' 本次拾取速度：'+speedText(data.decision.pickup_speed_limits)+'。';
+  }
+  if(data.capabilities?.environment==='robot_navigation')$('missionMode').textContent=decisionEnabled?(calibrated?'真实导航 / 磁铁拾取':actionDemo?'真实导航 / 识别动作测试':'真实导航 / 模拟拾取'):(c?.route?'真实多点导航':'真实单点导航');
   if(data.capabilities?.preview)$('missionMode').textContent='导航接口预览（模拟）';
   const arrived=navigationArrived(data);
-  const decisionPhase=decisionEnabled?(actionDemo?{CLEANING:'识别动作测试中',VERIFYING:'确认动作与停车'}:{CLEANING:'模拟拾取中',VERIFYING:'模拟复查中'})[s?.state]:null;
+  const decisionPhase=decisionEnabled?(calibrated?{CLEANING:'磁铁拾取中',VERIFYING:'确认拾取动作与停车'}:actionDemo?{CLEANING:'识别动作测试中',VERIFYING:'确认动作与停车'}:{CLEANING:'模拟拾取中',VERIFYING:'模拟复查中'})[s?.state]:null;
   $('missionState').textContent = s ? ((arrived?'已到达':decisionPhase||stateLabels[s.state]) + (online ? '' : '（最后状态）')) : '—';
   if(c?.route?.state==='WAITING_STOP')$('missionState').textContent='点位已到达，等待停车确认';
   if(c?.route?.state==='PAUSED')$('missionState').textContent='多点任务已暂停';
@@ -229,7 +245,7 @@ function renderStatus(data) {
   const haltLabels = {NONE:'未请求停车',CANCELING:'取消中',VERIFYING_STOP:'核实停车中',CONFIRMED:'已确认',UNCONFIRMED:'未确认'};
   $('haltState').textContent = online && s?.halt_state ? (haltLabels[s.halt_state] || s.halt_state) : '—';
   $('cleaningMode').textContent = s ? '模拟' : '—';
-  if(data.capabilities?.environment==='robot_navigation')$('cleaningMode').textContent=decisionEnabled?(actionDemo?'前进 / 后退动作测试':realPickup?'真实动作，吸附未确认':'模拟拾取'):'未启用';
+  if(data.capabilities?.environment==='robot_navigation')$('cleaningMode').textContent=decisionEnabled?(actionDemo?'前进 / 后退动作测试':calibrated?'磁铁拾取，吸附未确认':'模拟拾取'):'未启用';
   $('attemptState').textContent = s ? `${s.attempt} / ${s.max_attempts}` : '—';
   $('missionAlarm').textContent = s ? (s.alarm || '无') : '—';
   $('missionAlarm').style.color = s?.alarm ? '#e98a91' : '';
@@ -291,9 +307,10 @@ async function submitOperation(method, payload={}){
   }
 }
 $('startButton').addEventListener('click',()=>{
-  if(!(multiMode()?routeReady():validInputs())||!validSpeeds())return;
+  if(!(multiMode()?routeReady():validInputs())||!validSpeeds()||!validPickupSpeeds())return;
   void submitOperation('start',{map_id:currentStatus?.control?.map_id,
     speed_limits:speedInputs(),
+    ...(currentStatus?.mission?.cleaning_mode==='calibrated_pickup'&&$('autoPickup').checked?{pickup_speed_limits:pickupSpeeds.read()}:{}),
     ...(currentStatus?.capabilities?.auto_pickup?.supported===true?{auto_pickup:$('autoPickup').checked}:{}),
     ...(multiMode()?routeStartPayload(routeDraft,currentStatus?.control?.map_id,currentStatus?.capabilities?.waypoints):
       {goal:parseGoal({x:$('goalX').valueAsNumber,y:$('goalY').valueAsNumber,yaw_deg:$('goalYaw').valueAsNumber})})});

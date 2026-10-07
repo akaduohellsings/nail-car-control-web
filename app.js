@@ -1,7 +1,7 @@
 import {createVideoMonitor, createEventMonitor} from './service-monitor.js?v=20261006-video-topic';
 import {loadConfig} from './connection-config.js?v=20261006-video-network';
 import {installSettings} from './connection-settings.js?v=20261006-manual';
-import {createNavigationApi, controlPolicy} from './navigation-api.js?v=20261006-action-demo';
+import {createNavigationApi, controlPolicy} from './navigation-api.js?v=20261007-calibrated-pickup';
 import {parseSpeedInputs} from './navigation-speed.js';
 import {stateLabels, connectionLabels} from './task-labels.js';
 import {bindManualInput} from './manual-input.js';
@@ -39,7 +39,7 @@ function status(text,level='yellow'){
 function policy(){return controlPolicy(task,api.sessionId,api.controlAvailable);}
 function navigationBlocksStandalone(){
   return task?.connection==='ONLINE' && task.mission &&
-    (['nav2_with_mock_cleaning','nav2_with_motion_demo'].includes(task.mission.mode) || task.mission.state!=='IDLE' ||
+    (['nav2_with_mock_cleaning','nav2_with_motion_demo','nav2_with_calibrated_pickup'].includes(task.mission.mode) || task.mission.state!=='IDLE' ||
       task.control?.owner==='automatic' || task.control?.owner==='manual' || task.control?.owner==='blocked');
 }
 function canMove(direction){

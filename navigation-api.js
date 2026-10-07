@@ -16,8 +16,8 @@ export function validateEnvelope(data) {
   const s = data.mission;
   if (s !== null) {
     if (!s || Object.keys(s).length !== statusFields.length || statusFields.some(key => !(key in s))
-        || s.schema_version !== 1 || !['mock','nav2_with_mock_cleaning','nav2_with_motion_demo'].includes(s.mode)
-        || !states.includes(s.state) || !['mock','motion_demo'].includes(s.cleaning_mode)
+        || s.schema_version !== 1 || !['mock','nav2_with_mock_cleaning','nav2_with_motion_demo','nav2_with_calibrated_pickup'].includes(s.mode)
+        || !states.includes(s.state) || !['mock','motion_demo','calibrated_pickup'].includes(s.cleaning_mode)
         || typeof s.source_instance_id !== 'string' || !s.source_instance_id
         || typeof s.observed_at_ros_ns !== 'string' || !/^\d+$/.test(s.observed_at_ros_ns)
         || ['sequence','attempt','max_attempts'].some(key => !Number.isSafeInteger(s[key]) || s[key] < 0)
@@ -68,10 +68,12 @@ export function validateEnvelope(data) {
   if (data.read_only === false) {
     const c = data.control, cap = data.capabilities;
     const simulation=cap?.environment==='local_simulation' && s?.mode==='mock';
-    const robot=cap?.environment==='robot_navigation' && ['nav2_with_mock_cleaning','nav2_with_motion_demo'].includes(s?.mode)
+    const robot=cap?.environment==='robot_navigation' && ['nav2_with_mock_cleaning','nav2_with_motion_demo','nav2_with_calibrated_pickup'].includes(s?.mode)
       && Array.isArray(cap.commands) && new Set(cap.commands).size===cap.commands.length
       && ((cap.commands.length===5&&manualCap?.supported!==true)
-        ||(manualCap!==undefined&&cap.commands.length===8&&['request_manual','release_manual','manual_intent'].every(command=>cap.commands.includes(command))))
+        ||(manualCap!==undefined&&(cap.commands.length===8||
+            (cap.commands.length===9&&s?.cleaning_mode==='calibrated_pickup'&&cap.commands.includes('pickup_test')))
+          &&['request_manual','release_manual','manual_intent'].every(command=>cap.commands.includes(command))))
       && ['start','pause','resume','reset','stop'].every(command=>cap.commands.includes(command));
     if (!cap || cap.schema_version !== 1 || (!simulation&&!robot) || cap.control_enabled !== true
         || !c || c.schema_version !== 1
@@ -102,7 +104,7 @@ export function controlPolicy(data, sessionId, locallyAllowed = true) {
   const available=locallyAllowed && data?.connection==='ONLINE' && data?.read_only===false
     && data.capabilities?.control_enabled===true
     && ((data.capabilities.environment==='local_simulation'&&s?.mode==='mock')
-      || (data.capabilities.environment==='robot_navigation'&&['nav2_with_mock_cleaning','nav2_with_motion_demo'].includes(s?.mode)));
+      || (data.capabilities.environment==='robot_navigation'&&['nav2_with_mock_cleaning','nav2_with_motion_demo','nav2_with_calibrated_pickup'].includes(s?.mode)));
   const simulation=data?.capabilities?.environment==='local_simulation';
   const manualSupported=simulation || (data?.capabilities?.manual_control?.supported===true
     && ['request_manual','release_manual','manual_intent'].every(command=>data.capabilities.commands?.includes(command)));
@@ -113,6 +115,8 @@ export function controlPolicy(data, sessionId, locallyAllowed = true) {
   const routeActive=['RUNNING','WAITING_STOP','PAUSED'].includes(c?.route?.state);
   const routePaused=c?.route?.state==='PAUSED';
   return {available,own,manual,
+    pickupTest:ready&&!busy&&!halting&&stopped&&c.localization_valid&&s.state==='IDLE'&&!routeActive&&c.owner==='none'
+      &&s.cleaning_mode==='calibrated_pickup'&&data.capabilities.commands.includes('pickup_test')&&data.capabilities.auto_pickup?.supported===true,
     start:ready&&!busy&&!halting&&stopped&&c.localization_valid&&(s.state==='IDLE'||retry)&&!routeActive&&c.owner!=='manual',
     pause:ready&&!busy&&!halting&&(s.state!=='IDLE'||routeActive)&&s.state!=='FAULT'&&!routePaused&&c.owner!=='manual',
     resume:ready&&!busy&&!halting&&stopped&&c.localization_valid&&(s.state==='PAUSED'||routePaused)&&!!s.saved_goal&&c.owner!=='manual'&&c.phase!=='FAULT',
@@ -170,7 +174,7 @@ export function createNavigationApi({ baseUrl = '', sessionId = crypto.randomUUI
   async function send(command, payload={}, keepalive=false) {
     if(!localControl())throw new NavigationNotConnectedError();
     if(command!=='stop' && !fresh())throw new Error('任务状态过期，不能发送新操作');
-    const actionNames={request_manual:'requestManual',release_manual:'releaseManual',manual_intent:'manualIntent'};
+    const actionNames={request_manual:'requestManual',release_manual:'releaseManual',manual_intent:'manualIntent',pickup_test:'pickupTest'};
     const policy=controlPolicy(latest,sessionId,localControl());
     if(command!=='stop'&&!policy[actionNames[command]||command])throw new Error('当前控制权或停车条件不允许该操作');
     const body={...payload,schema_version:1,request_id:payload.request_id||crypto.randomUUID(),command,
@@ -239,6 +243,7 @@ export function createNavigationApi({ baseUrl = '', sessionId = crypto.randomUUI
       } finally {clearTimeout(timeout);}
     },
     start: payload=>send('start',payload),
+    pickupTest: payload=>send('pickup_test',payload),
     pause: payload=>send('pause',payload),
     resume: payload=>send('resume',payload),
     reset: payload=>send('reset',payload),

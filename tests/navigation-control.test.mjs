@@ -35,6 +35,18 @@ test('real action demo retains stop and manual takeover while blocking new navig
  assert.equal(controlPolicy(d,'A').requestManual,true);assert.equal(controlPolicy(d,'A').manualIntent,false);
  d.connection='STALE';assert.equal(controlPolicy(d,'A').requestManual,false);
 });
+test('calibrated pickup supports standalone tests only while stopped and idle; motion keeps Stop',()=>{
+ const d=status();d.mission.mode='nav2_with_calibrated_pickup';d.mission.cleaning_mode='calibrated_pickup';
+ d.capabilities={schema_version:1,environment:'robot_navigation',control_enabled:true,
+  commands:['start','pause','resume','reset','stop','request_manual','release_manual','manual_intent','pickup_test'],
+  auto_pickup:{supported:true,cleaning_mode:'calibrated_pickup'},manual_control:{supported:true,
+  directions:['stop','forward','backward','left','right'],speed_limits:{linear_max_m_s:.3,angular_max_rad_s:Math.PI/4,defaults:{linear_m_s:.04,angular_rad_s:.24}}}};
+ validateEnvelope(d);assert.equal(controlPolicy(d,'A').pickupTest,true);
+ d.control.controller_id='B';assert.equal(controlPolicy(d,'A').pickupTest,false);
+ d.control.controller_id='A';d.control.owner='automatic';d.mission.state='CLEANING';d.mission.stationary_confirmed=false;
+ assert.equal(controlPolicy(d,'A').pickupTest,false);assert.equal(controlPolicy(d,'A').start,false);assert.equal(controlPolicy(d,'A').stop,true);
+ d.connection='STALE';assert.equal(controlPolicy(d,'A').pickupTest,false);
+});
 
 test('HALTING, stale, unlocalized and other-page status cannot grant control',()=>{
  const d=status();assert.equal(controlPolicy(d,'A').start,true);

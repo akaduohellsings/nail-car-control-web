@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>钉探 · 静止定位</title><link rel="stylesheet" href="topbar.css"><link rel="stylesheet" href="navigation.css?v=20261006-waypoints">
+<title>钉探 · 定位与拾取</title><link rel="stylesheet" href="topbar.css"><link rel="stylesheet" href="navigation.css?v=20261006-waypoints">
 <link rel="stylesheet" href="connection-settings.css?v=20261006-video-network"><link rel="stylesheet" href="pickup-localization.css?v=20261007-static"></head>
 <body><header class="topbar"><a class="brand" href="index.html"><span class="brand-mark">钉</span><strong>钉探<span>机器人控制台</span></strong></a>
 <nav aria-label="控制页面"><a href="index.html">手动控制</a><a href="navigation.html">导航控制</a><a href="pickup-localization.html" aria-current="page">静止定位</a></nav>
 <span class="topbar-spacer"></span><button class="button subtle" id="settingsButton">连接设置</button></header>
-<main><div class="page-heading"><div><span class="eyebrow">拾取重构 · 第一步</span><h1>钉子静止定位</h1>
-<p>先核对地面位置与磁铁覆盖范围。所有按钮只采集、计算或保存数据。</p></div></div>
+<main><div class="page-heading"><div><span class="eyebrow">地面标定 · 磁铁拾取</span><h1>钉子定位与拾取</h1>
+<p>核对地面位置与磁铁覆盖范围；也可手动标记钉子，单独测试磁铁拾取动作。</p></div></div>
 <section class="card"><div class="card-heading"><h2>1 · 获取停稳画面</h2><button class="button primary" id="captureButton">获取静止快照</button></div>
 <p>请先在导航页停止任务并等小车停稳，再进入本页。需要相机、YOLO和导航任务服务已启动。</p>
 <p id="connectionAddress"></p><p id="captureStatus" role="status">点击“获取静止快照”拍摄照片；本页不会自动播放实时视频。</p>
@@ -23,7 +23,15 @@
 <svg id="groundPreview" viewBox="0 0 360 260" aria-label="地面俯视示意：目标和磁铁扫过区域"></svg>
 <p id="targetStatus" role="status">距离需要实测地面标定；识别框中心仅作为地面位置近似。</p>
 <p>区域仅为几何覆盖估计，不代表路径无障碍或已成功吸附。</p></div></div></section>
-<section class="card"><div class="card-heading"><h2>2 · 地面标定</h2><button class="text-button" id="clearPoints">清空标记</button></div>
+<section class="card"><h2>2 · 手动点选拾取测试</h2>
+<p>获取停稳快照，点击钉子中心并核对安装条件，再执行测试。小车会对准并前进，让磁铁经过钉子；本页测试结束后停车，不发导航目标。移动小车或钉子后需重新拍照，快照有效期60秒。</p>
+<button type="button" class="button subtle" id="loadServiceCalibration" disabled>载入导航服务使用的标定</button>
+<div class="point-form"><label>拾取最大移动速度（米/秒）<input id="pickupLinearSpeed" type="number" min="0.001" max="0.3" step="any" value="0.04"></label><label>拾取最大转向速度（度/秒）<input id="pickupAngularSpeed" type="number" min="0.01" max="45" step="any" value="13.75"></label><button type="button" class="text-button" id="savePickupSpeed">保存拾取速度草稿</button></div>
+<p id="pickupSpeedHint">上限与导航相同：0.3 米/秒、45 度/秒；随下一次测试生效。</p>
+<label class="mount-confirm"><input id="pickupTestConditions" type="checkbox"> 我在车旁，磁铁已固定，动作区域空旷，线缆有转向和前进余量。</label>
+<div class="task-actions"><button type="button" class="button primary" id="pickupTestButton" disabled>按标记位置执行拾取</button><button type="button" class="button stop-button" id="pickupStopButton" disabled>停止任务</button></div>
+<p id="pickupTestStatus" role="status">等待任务服务连接；拾取动作完成不代表吸附成功。</p></section>
+<section class="card"><div class="card-heading"><h2>3 · 地面标定</h2><button class="text-button" id="clearPoints">清空标记</button></div>
 <p>以车体坐标原点（base_link在地面的投影）为零点：X向前、Y向左。保持车和相机不动，用尺子量出标记坐标；在画面点击对应标记中心后添加。标定点应覆盖前后和左右范围。</p>
 <p>至少6个标定点；另选至少2个未参与拟合的独立核验点，放在标定区域内。可移动地面标记并重新拍照，小车必须保持不动。</p>
 <div class="point-form"><label>前方X（cm）<input id="pointX" type="number" min="0" max="300" step="0.1"></label>
@@ -38,5 +46,5 @@
 <div class="task-actions"><button class="button primary" id="saveCalibration">计算、核验并保存</button>
 <button class="button subtle" id="exportCalibration">导出标定</button><label class="button subtle">导入标定<input id="importCalibration" type="file" accept="application/json,.json" hidden></label></div>
 <p id="formStatus" role="status">尚未标定，不使用默认距离。</p></section>
-<footer>钉探 · 静止定位 <span>第一步：测量与核验 · 不执行拾取动作</span></footer></main>
-<script type="module" src="pickup-localization.js?v=20261007-snapshot-wait"></script></body></html>
+<footer>钉探 · 定位与拾取 <span>标定、手动点选测试 · 磁吸结果需现场确认</span></footer></main>
+<script type="module" src="pickup-localization.js?v=20261007-calibrated-pickup"></script></body></html>
