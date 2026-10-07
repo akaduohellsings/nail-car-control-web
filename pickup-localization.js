@@ -3,7 +3,7 @@ import {installSettings} from './connection-settings.js?v=20261006-video-network
 import {fitCalibration,locatePixel,cameraValid} from './pickup-geometry.js?v=20261007-static';
 import {getStationaryObservation} from './pickup-snapshot.js?v=20261007-snapshot-wait';
 import {installPickupSpeeds} from './pickup-speed.js?v=20261007-calibrated-pickup';
-import {installPickupTest} from './pickup-test.js?v=20261007-calibrated-pickup';
+import {installPickupTest} from './pickup-test.js?v=20261007-pickup-button';
 const $=id=>document.getElementById(id),KEY='nail.pickup.groundCalibration.v1';
 let config=loadConfig(),observation=null,photo=null,selected=null,model=null,busy=false,generation=0;
 let draft={schema_version:1,camera:null,fit:[],checks:[],magnet:null,mount_note:''};

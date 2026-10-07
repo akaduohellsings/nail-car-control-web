@@ -60,13 +60,19 @@ let s={schema_version:1,read_only:false,bridge_instance_id:'fixture',connection:
   await page.goto(base+'/pickup-localization.html');
   jpeg=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=640;c.height=480;const ctx=c.getContext('2d');ctx.fillStyle='#dbddd7';ctx.fillRect(0,0,640,480);return c.toDataURL('image/jpeg').split(',')[1];});
   assert.equal(commands.length,0);
+  await page.waitForFunction(()=>document.getElementById('pickupTestBlockers').textContent.includes('获取静止快照'));
   await page.click('#captureButton');await page.waitForFunction(()=>document.getElementById('captureStatus').textContent.includes('已获取'));
+  assert.match(await page.textContent('#pickupTestBlockers'),/载入导航服务使用的标定/);
   await page.click('#loadServiceCalibration');await page.check('#mountConfirmed');
   const point=draft.fit[5],box=await page.locator('#photo').boundingBox();
   await page.mouse.click(box.x+point.u/640*box.width,box.y+point.v/480*box.height);
   await page.fill('#pickupLinearSpeed','.12');await page.fill('#pickupAngularSpeed','30');await page.click('#savePickupSpeed');
-  assert.equal(await page.isDisabled('#pickupTestButton'),true);await page.check('#pickupTestConditions');
+  assert.equal(await page.isDisabled('#pickupTestButton'),true);
+  assert.match(await page.textContent('#pickupTestBlockers'),/我在车旁/);
+  await page.check('#pickupTestConditions');
   await page.waitForFunction(()=>!document.getElementById('pickupTestButton').disabled);
+  assert.equal(await page.textContent('#pickupTestBlockers'),'');
+  assert.match(await page.textContent('#pickupTestStatus'),/已准备好/);
   assert.equal(commands.length,0);await page.click('#pickupTestButton');
   await page.waitForFunction(()=>document.getElementById('pickupTestStatus').textContent.includes('对准目标'));
   assert.equal(commands[0].command,'pickup_test');assert.equal(commands[0].capture_id,'capture-fixture');
@@ -74,6 +80,7 @@ let s={schema_version:1,read_only:false,bridge_instance_id:'fixture',connection:
   assert.equal(commands[0].goal,undefined);assert.equal(await page.isDisabled('#pickupTestButton'),true);
   await page.click('#pickupStopButton');await page.waitForFunction(()=>document.getElementById('pickupStopButton').disabled===false);
   assert.equal(commands.at(-1).command,'stop');
+  await page.waitForFunction(()=>document.getElementById('pickupTestBlockers').textContent.includes('已用于拾取'));
   await page.goto(base+'/navigation.html');await page.click('#connectButton');
   await page.waitForFunction(()=>!document.getElementById('autoPickup').disabled);
   await page.fill('#goalX','.7');await page.fill('#goalY','0');await page.fill('#goalYaw','0');

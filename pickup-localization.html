@@ -30,7 +30,8 @@
 <p id="pickupSpeedHint">上限与导航相同：0.3 米/秒、45 度/秒；随下一次测试生效。</p>
 <label class="mount-confirm"><input id="pickupTestConditions" type="checkbox"> 我在车旁，磁铁已固定，动作区域空旷，线缆有转向和前进余量。</label>
 <div class="task-actions"><button type="button" class="button primary" id="pickupTestButton" disabled>按标记位置执行拾取</button><button type="button" class="button stop-button" id="pickupStopButton" disabled>停止任务</button></div>
-<p id="pickupTestStatus" role="status">等待任务服务连接；拾取动作完成不代表吸附成功。</p></section>
+<p id="pickupTestStatus" role="status">等待任务服务连接；拾取动作完成不代表吸附成功。</p>
+<ul id="pickupTestBlockers" aria-label="拾取按钮未就绪原因"></ul></section>
 <section class="card"><div class="card-heading"><h2>3 · 地面标定</h2><button class="text-button" id="clearPoints">清空标记</button></div>
 <p>以车体坐标原点（base_link在地面的投影）为零点：X向前、Y向左。保持车和相机不动，用尺子量出标记坐标；在画面点击对应标记中心后添加。标定点应覆盖前后和左右范围。</p>
 <p>至少6个标定点；另选至少2个未参与拟合的独立核验点，放在标定区域内。可移动地面标记并重新拍照，小车必须保持不动。</p>
@@ -47,4 +48,4 @@
 <button class="button subtle" id="exportCalibration">导出标定</button><label class="button subtle">导入标定<input id="importCalibration" type="file" accept="application/json,.json" hidden></label></div>
 <p id="formStatus" role="status">尚未标定，不使用默认距离。</p></section>
 <footer>钉探 · 定位与拾取 <span>标定、手动点选测试 · 磁吸结果需现场确认</span></footer></main>
-<script type="module" src="pickup-localization.js?v=20261007-calibrated-pickup"></script></body></html>
+<script type="module" src="pickup-localization.js?v=20261007-pickup-button"></script></body></html>
